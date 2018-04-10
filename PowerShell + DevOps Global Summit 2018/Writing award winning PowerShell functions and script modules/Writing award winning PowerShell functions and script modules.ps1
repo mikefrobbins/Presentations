@@ -49,7 +49,7 @@ Import-Module U:\GitHub\PowerShell\MrToolkit\MrToolkit.psd1
 #Clear the screen
 Clear-Host
 
-(Get-HotFix).Where({$_.hotfix -gt (Get-Date).AddDays(-1)})
+Get-HotFix | Where-Object InstalledOn -gt (Get-Date).AddDays(-1)
 
 #endregion
 
@@ -1528,7 +1528,9 @@ $PSModuleAutoloadingPreference
       (http://go.microsoft.com/fwlink/?LinkID=144311).
 ##>
 
+#******************************************************************
 #Close out of all open script and/or module files
+#******************************************************************
 
 #Move our newly created module to a location that exist in $env:PSModulePath
 Move-Item -Path $Path\MyModule -Destination $env:ProgramFiles\WindowsPowerShell\Modules
@@ -1597,7 +1599,7 @@ New-ModuleManifest -Path "$env:ProgramFiles\WindowsPowerShell\Modules\MyModule\M
                    -CompanyName mikefrobbins.com
 
 <#
-    I try to avoid using the backtick character for line continuation.
+    I avoid using the backtick character for line continuation.
 
     To learn more about splatting, see the following help topic.
     https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_splatting
@@ -1605,7 +1607,7 @@ New-ModuleManifest -Path "$env:ProgramFiles\WindowsPowerShell\Modules\MyModule\M
 
 #endregion
 
-#region Plaster
+#region Plaster & Non-Monolithic Script Module Design
 
 <#
     I have a function in my MrToolkit module named New-MrScriptModule that creates the
@@ -1661,6 +1663,8 @@ ForEach-Object {
     . $_.FullName
 }
 '@
+
+psEdit -filenames $Path\PlasterTemplate\Module.psm1
 
 <#
     Complete the Plaster template by adding parameter and content sections as shown
@@ -1732,6 +1736,8 @@ If (-not(Test-Path -Path $plasterParams.DestinationPath -PathType Container)) {
     New-Item -Path $plasterParams.DestinationPath -ItemType Directory | Out-Null
 }
 Invoke-Plaster @plasterParams -Verbose
+
+explorer.exe $Path\PlasterTemplate
 
 <#
     Sometimes learning new things can seem overwhelming based on examples you’ll
@@ -1854,8 +1860,13 @@ function Get-MrSystemInfo {
 #Open the new script module file in the ISE
 psEdit -filenames "$Path\MrTestModule\Get-MrSystemInfo.ps1"
 
+Test-MrFunctionsToExport -ManifestPath $Path\MrTestModule\MrTestModule.psd1
+Get-MrFunctionsToExport -Path $Path\MrTestModule
+
 #Add this newly created function to the list of functions to export in the manifest
 Update-ModuleManifest -Path "$Path\MrTestModule\MrTestModule.psd1" -FunctionsToExport Get-MrSystemInfo
+
+Test-MrFunctionsToExport -ManifestPath $Path\MrTestModule\MrTestModule.psd1
 
 #Import the module
 Import-Module "$Path\MrTestModule\MrTestModule.psd1"
@@ -2065,6 +2076,9 @@ Import-Module "$Path\MrTestModule\MrTestModule.psd1" -Force
 #Show the output
 Get-MrSystemInfo
 
+Get-MrSystemInfo | Select-Object -Property *
+Get-MrSystemInfo | Get-Member
+
 <#
     Extended Type Data
     https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_types.ps1xml
@@ -2147,14 +2161,16 @@ Describe 'Test-ToUpper' {
     Semicolons at the end of lines.
 
     Write-Host
+
+    Single quotes versus double quotes
+
+    Coding style
+    Indentation style
 #>
 
 #endregion
 
 #region Bonus Content
-
-psEdit -filenames U:\GitHub\PowerShell\MrToolkit\Get-MrService.ps1
-psEdit -filenames U:\GitHub\PowerShell\MrToolkit\Get-MrVmHost.ps1
 
 #Is PowerShell case insensitive?
 
@@ -2186,14 +2202,18 @@ $Features -contains 'SQLEngine'
 $Features.Replace('SQLEngine', 'SQL')
 $Features.Replace('SQLENGINE', 'SQL')
 
+#PowerShell functions to show
+psEdit -filenames U:\GitHub\PowerShell\MrToolkit\Get-MrService.ps1
+psEdit -filenames U:\GitHub\PowerShell\MrToolkit\Get-MrVmHost.ps1
+
+#Mention Simon Wåhlin's code for putting a module back together and testing it
+#https://github.com/SimonWahlin
+
 #endregion
 
 #region Additional Resources
 
 <#
-    Coding style
-    Indentation style
-
     The PowerShell Best Practices and Style Guide
     https://github.com/PoshCode/PowerShellPracticeAndStyle
 
