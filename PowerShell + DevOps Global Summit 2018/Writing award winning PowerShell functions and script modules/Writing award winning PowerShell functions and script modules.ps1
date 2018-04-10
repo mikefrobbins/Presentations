@@ -27,6 +27,15 @@ throw "You're not supposed to run the entire script"
 #Set PowerShell ISE Zoom to 175%
 $psISE.Options.Zoom = 175
 
+<#
+    Presentation Tip: when using the #PowerShell console, modify the error color for better
+    readability AND audience members with Color Blindness. - Michael Bender
+    https://twitter.com/MichaelBender/status/983485482423078913
+#>
+
+#Set error messages to yellow
+$host.PrivateData.ErrorForegroundColor = 'yellow'
+
 #Set location
 $Path = 'C:\Demo'
 if (-not(Test-Path -Path $Path -PathType Container)) {
@@ -34,8 +43,13 @@ if (-not(Test-Path -Path $Path -PathType Container)) {
 }
 Set-Location -Path $Path
 
+#Import my MrToolkit module (https://github.com/mikefrobbins/PowerShell)
+Import-Module U:\GitHub\PowerShell\MrToolkit\MrToolkit.psd1
+
 #Clear the screen
 Clear-Host
+
+(Get-HotFix).Where({$_.hotfix -gt (Get-Date).AddDays(-1)})
 
 #endregion
 
@@ -555,6 +569,53 @@ Test-MrParameterValidation -ComputerName Server01, Server02
     or . which makes the command more dynamic and it's considered to be a best practice.
 #>
 
+#ValidatePattern
+
+#ValidatePattern validates the input against a regular expression.
+
+function Test-ValidatePattern {
+    [CmdletBinding()]
+    param (
+        [ValidatePattern('^(?!^(PRN|AUX|CLOCK\$|NUL|CON|COM\d|LPT\d|\..*)(\..+)?$)[^\x00-\x1f\\?*:\"";|/]+$')]
+        [string]$FileName
+    )
+    Write-Output $FileName
+}
+
+#If the value doesn’t match the regular expression, an error is generated.
+
+Test-ValidatePattern -FileName '.con'
+
+<#
+    As you can see in the previous example, the error messages that ValidatePattern generates are
+    cryptic unless you read regular expressions and since most people don’t, I typically avoid
+    using it. The same type of input validation can be performed using ValidateScript  while
+    providing the user of your function with a meaningful error message.
+#>
+
+#ValidateScript
+
+#ValidateScript uses a script to validate the value:
+
+function Test-ValidateScript {
+    [CmdletBinding()]
+    param (
+        [ValidateScript({
+            If ($_ -match '^(?!^(PRN|AUX|CLOCK\$|NUL|CON|COM\d|LPT\d|\..*)(\..+)?$)[^\x00-\x1f\\?*:\"";|/]+$') {
+                $True
+            }
+            else {
+                Throw "$_ is either not a valid filename or it is not recommended."
+            }
+        })]
+        [string]$FileName
+    )
+    Write-Output $FileName
+}
+
+#Notice the meaningful error message.
+
+Test-ValidateScript -FileName '.con'
 
 #Enumerations
 
@@ -618,6 +679,8 @@ Test-MrIPAddress -IPAddress 10.1.1.255
 Test-MrIPAddress -IPAddress 10.1.1.256
 Test-MrIPAddress -IPAddress 2001:db8::ff00:42:8329
 Test-MrIPAddress -IPAddress 2001:db8:::ff00:42:8329
+
+psEdit -filenames U:\GitHub\PowerShell\MrToolkit\Test-MrIpAddress.ps1
 
 #You might ask, how do I find Type Accelerators? With the following code.
 
@@ -824,6 +887,165 @@ help Test-MrMultiParamSet -Parameter Path
     For more information about using multiple parameter sets in your functions, see the
     about_Functions_Advanced_Parameters help topic.
     https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_functions_advanced_parameters
+#>
+
+#endregion
+
+#region Return Keyword
+
+<#
+    The return keyword is probably the most over used keyword in PowerShell that’s used in
+    unnecessary scenarios. You’ll often find it used to simply return the output of a function.
+#>
+
+function New-MrGuid {
+    $Guid = [System.Guid]::NewGuid()
+    Return $Guid
+}
+
+New-MrGuid
+
+<#
+    In that scenario, using the return keyword is totally unnecessary. If you do want to
+    return the value of the variable, simply let PowerShell take care of returning the output.
+#>
+
+function New-MrGuid {
+    $Guid = [System.Guid]::NewGuid()
+    $Guid
+}
+
+New-MrGuid
+
+<#
+    Although I didn’t specify it in the previous example, I typically use Write-Output
+    instead of just specifying the variable itself.
+#>
+
+function New-MrGuid {
+    $Guid = [System.Guid]::NewGuid()
+    Write-Output $Guid
+}
+
+New-MrGuid
+
+<#
+    In the previous example, there’s no reason to store the value in a variable, simply
+    create the new GUID and let PowerShell handle returning the output all in one command.
+#>
+
+function New-MrGuid {
+    [System.Guid]::NewGuid()
+}
+
+New-MrGuid
+
+<#
+    The return keyword does have a couple of valid use cases though. The following
+    function does not use the return keyword.
+#>
+
+function Test-Return {
+    [CmdletBinding()]
+    param (
+        [int[]]$Number
+    )
+    foreach ($N in $Number) {
+        if ($N -ge 4) {
+            $N
+        }
+    }
+}
+
+#Without the return keyword any number greater than or equal to four is returned.
+
+Test-Return -Number 3, 5, 7, 9
+
+#Notice that the return keyword has been added to the function without any other changes.
+
+function Test-Return {
+    [CmdletBinding()]
+    param (
+        [int[]]$Number
+    )
+    foreach ($N in $Number) {
+        if ($N -ge 4) {
+            Return $N
+        }
+    }
+}
+
+<#
+    With the return keyword, the first value that is greater than or equal to 4 will be
+    returned and then the foreach loop will exit without testing the numbers 7 or 9.
+#>
+
+Test-Return -Number 3, 5, 7, 9
+
+<#
+    Not only does it exit the foreach loop, but the entire function so if additional code
+    existed after the foreach loop, it wouldn’t be executed either. A slightly modified
+    version of the previous function will be used to demonstrate this.
+#>
+
+#For the first test, the return keyword is omitted.
+
+function Test-Return {
+    [CmdletBinding()]
+    param (
+        [int[]]$Number
+    )
+    $i = 0
+    foreach ($N in $Number) {
+        if ($N -ge 4) {
+            $i++
+            $N
+        }
+    }
+    Write-Verbose -Message "A total of $i items were returned."
+}
+
+<#
+    The verbose output after the foreach loop is included in the output when specifying
+    the verbose parameter.
+#>
+
+Test-Return -Number (1..10) -Verbose
+
+#The return keyword has been added to the following function.
+
+function Test-Return {
+    [CmdletBinding()]
+    param (
+        [int[]]$Number
+    )
+    $i = 0
+    foreach ($N in $Number) {
+        if ($N -ge 4) {
+            $i++
+            Return $N
+        }
+    }
+    Write-Verbose -Message "A total of $i items were returned."
+}
+
+Test-Return -Number (1..10) -Verbose
+
+<#
+    Notice that although the verbose parameter was specified, the verbose output is not included
+    because the return keyword causes the function to exit before it gets to that point.
+
+    Of course, if the portion of the code with the return keyword isn’t run, the verbose
+    output will be included in the output when the verbose parameter is specified.
+#>
+
+Test-Return -Number (1..3) -Verbose
+
+<#
+    Classes - The return keyword is required when using them (this is the other use case).
+
+    For more information about the return keyword, see the about_Return help topic.
+    https://docs.microsoft.com/en-us/powershell/module/microsoft.powershell.core/about/about_return
 #>
 
 #endregion
@@ -1547,7 +1769,7 @@ Invoke-Plaster @plasterParams -Verbose
     If you're interested in learning more about Plaster, consider attending the
     following session.
 
-    Creating PowerShell Projects and more with Plaster -  Thursday, April 12th at 2pm
+    Creating PowerShell Projects and more with Plaster - Wednesday, April 12th at 3pm
     https://powershelldevopsglobalsummit2018.sched.com/event/CrVY/creating-powershell-projects-and-more-with-plaster
 #>
 
@@ -1921,7 +2143,48 @@ Describe 'Test-ToUpper' {
 <#
     Don't hard code Format-* commands into your functions because it limits
     their functionality and their reusability.
+
+    Semicolons at the end of lines.
+
+    Write-Host
 #>
+
+#endregion
+
+#region Bonus Content
+
+psEdit -filenames U:\GitHub\PowerShell\MrToolkit\Get-MrService.ps1
+psEdit -filenames U:\GitHub\PowerShell\MrToolkit\Get-MrVmHost.ps1
+
+#Is PowerShell case insensitive?
+
+#The region keyword
+
+<#
+    While working with the xSQLServer DSC resource, I discovered that it wouldn’t work properly
+    if a feature was specified in your DSC configuration in a case other than upper case. I
+    determined this was due to the contains method being case sensitive.
+#>
+
+$Features = 'SQLENGINE', 'SSMS', 'ADV_SSMS'
+$Features.Contains('SQLENGINE')
+$Features.Contains('SQLEngine')
+
+<#
+    There are two ways to solve this problem. Either convert what the user enters to the same
+    case specified in your code or use the contains keyword instead.
+#>
+
+$Features.Contains('SQLEngine'.ToUpper())
+$Features -contains 'SQLEngine'
+
+<#
+    Case sensitivity isn’t exclusive to the contains method as most if not all of the methods
+    that can be called are case sensitive as shown here where I’ll use the replace method.
+#>
+
+$Features.Replace('SQLEngine', 'SQL')
+$Features.Replace('SQLENGINE', 'SQL')
 
 #endregion
 
@@ -1954,5 +2217,6 @@ Remove-Item -Path $env:ProgramFiles\WindowsPowerShell\Modules\MyModule -Recurse 
 Get-ChildItem -Path $Path | Remove-Item -Recurse
 Set-Location -Path C:\
 $psISE.Options.Zoom = 100
+$host.PrivateData.ErrorForegroundColor = 'red'
 
 #endregion
