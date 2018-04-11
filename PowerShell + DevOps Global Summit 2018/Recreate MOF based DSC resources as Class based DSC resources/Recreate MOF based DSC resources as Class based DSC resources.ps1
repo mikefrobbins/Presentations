@@ -161,12 +161,15 @@ New-xDscResource @cMrRdpParams
 
 #Or with a PowerShell one-liner.
 
-New-xDscResource –Name cMrRDP -Property (New-xDscResourceProperty –Name UserAuthentication –Type String –Attribute Key -ValidateSet 'Secure', 'NonSecure'),
-(New-xDscResourceProperty –Name Ensure –Type String –Attribute Write –ValidateSet 'Present', 'Absent') -Path "$env:ProgramFiles\WindowsPowerShell\Modules\cMrRDP"
+#New-xDscResource –Name cMrRDP -Property (New-xDscResourceProperty –Name UserAuthentication –Type String –Attribute Key -ValidateSet 'Secure', 'NonSecure'),
+#(New-xDscResourceProperty –Name Ensure –Type String –Attribute Write –ValidateSet 'Present', 'Absent') -Path "$env:ProgramFiles\WindowsPowerShell\Modules\cMrRDP"
 
 <#
     I recommend using the multiline option since it's more readable and easier to
     troubleshoot if you happen to run into any problems.
+
+    If you specify the ModuleName parameter when running New-xDscResource, a module manifest
+    will be created automatically for you and the folder stucture is slightly different.
 #>
 
 #************************************************************************************
@@ -335,10 +338,10 @@ function Test-TargetResource {
         1 {$AuthCurrentSetting = 'Secure'; Break}
     }
 
-switch ($fDenyTSConnections) {
-    0 {$TSCurrentSetting = 'Enabled'; Break}
-    1 {$TSCurrentSetting = 'Disabled'; Break}
-}
+    switch ($fDenyTSConnections) {
+        0 {$TSCurrentSetting = 'Enabled'; Break}
+        1 {$TSCurrentSetting = 'Disabled'; Break}
+    }
 
     if ($UserAuthentication -eq $AuthCurrentSetting -and $TSDesiredSetting -eq $TSCurrentSetting) {
         Write-Verbose -Message 'RDP settings match the desired state'
@@ -559,6 +562,9 @@ class RemoteDesktop {
 }
 '@
 
+#Show the script module (PSMa 1 file)
+psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\MrRemoteDesktop.psm1"
+
 <#
     You’ll also need a module manifest file. The module manifest shown in the following
     example has been saved as MrRemoteDesktop.psd1 in the same folder as the script module file.
@@ -578,15 +584,17 @@ $ManifestParams2 = @{
 New-ModuleManifest @ManifestParams2
 
 <#
-    Remote Desktop is currently enabled on the server named SQL01 as shown in Figure 2.2.1.
-    This server has the server core (no-GUI) installation of Windows Server 2012 R2 and I
-    don’t want admins using remote desktop to connect to it. They should either use
-    PowerShell to remotely administer it or install the GUI tools on their workstation or
-    a server that’s dedicated for management of other systems (what I call a jump box).
+    Remote Desktop is currently enabled on the server named Server01. This server has the
+    server core (no-GUI) installation of Windows Server 2012 R2 and I don’t want admins
+    using remote desktop to connect to it. They should either use PowerShell to remotely
+    administer it or install the GUI tools on their workstation or a server that’s dedicated
+    for management of other systems (what I call a jump box).
 
-    A configuration to disable RDP is written, the MOF file for SQL01 is generated, and
+    A configuration to disable RDP is written, the MOF file for Server01 is generated, and
     it’s applied using push mode.
 #>
+
+#Deploy the Resource
 
 $DeployParams2 = @{
     Path = "$env:ProgramFiles\WindowsPowerShell\modules\MrRemoteDesktop"
@@ -596,6 +604,8 @@ $DeployParams2 = @{
 }
 
 Copy-Item @DeployParams2
+
+#Create a simple DSC configuration
 
 Configuration RDP {
     Import-DSCResource -ModuleName MrRemoteDesktop
@@ -611,6 +621,8 @@ Configuration RDP {
 }
 
 RDP
+
+#Apply the configuration
 
 Start-DscConfiguration -Path .\RDP -ComputerName SERVER01 -Wait -Verbose -Force
 
@@ -690,9 +702,7 @@ class RemoteDesktop {
 $RDP = [RemoteDesktop]::new()
 $RDP.Get()
 
-
-#I’ll remove the switch statements to show that numeric values are indeed returned without them.
-
+#Remove the switch statements to show that numeric values are indeed returned without them.
 
 class RemoteDesktop {
 
