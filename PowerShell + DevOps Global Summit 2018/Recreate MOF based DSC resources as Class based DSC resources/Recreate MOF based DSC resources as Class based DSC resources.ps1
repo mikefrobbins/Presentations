@@ -18,17 +18,23 @@ throw "You're not supposed to run the entire script"
     The code in this region was stolen, I mean borrowed from Thomas Rayner (@MrThomasRayner).
     For more information, see:
     http://mikefrobbins.com/2017/11/02/safety-to-prevent-entire-script-from-running-in-the-powershell-ise/
-    
-    Always give credit when using other peoples code.
 #>
 
 #endregion
 
 #region Presentation Prep
 
-#Zoom in (Cntl+) in VSCode
-#Or Set PowerShell ISE Zoom to 175%
+#Set PowerShell ISE Zoom to 175%
 $psISE.Options.Zoom = 175
+
+<#
+    Presentation Tip: when using the #PowerShell console, modify the error color for better
+    readability AND audience members with Color Blindness. - Michael Bender
+    https://twitter.com/MichaelBender/status/983485482423078913
+#>
+
+#Set error messages to yellow
+$host.PrivateData.ErrorForegroundColor = 'yellow'
 
 #Set location
 $Path = 'C:\Demo'
@@ -45,40 +51,48 @@ Clear-Host
 #region Demo Environment
 
 <#
-The workstation used throughout this demo is running Windows 10 version 1709 and the servers
-are running Windows Server 2016. They're all a member of the same Active Directory domain.
-Each of them runs Windows PowerShell version 5.1 which ships in the box with all of those
-operating systems.
+    The workstation used throughout this demo is running Windows 10 version 1709
+    and the servers are running Windows Server 2016. They're all a member of the
+    same Active Directory domain. Each of them runs Windows PowerShell version 5.1
+    which ships in the box with all of those operating systems.
 
-Be aware that as of this writing, DSC (Desired State Configuration) does not currently work
-with PowerShell Core 6.0 or higher on Windows systems. I haven't tried DSC on Linux or macOS
-so I can't speak for those operating systems. To be more specific, the commands in the
-PSDesiredStateConfiguration module do not work on Windows systems due to the current
-implementation relying on WMI (Windows Management Instrumentation) which does not exist in
-PowerShell Core. Currently, you must use Windows PowerShell version 4 or higher for MOF based
-DSC resources and Windows PowerShell version 5.0 or higher for class based DSC resources.
+    Be aware that as of this writing, DSC (Desired State Configuration) does not
+    currently work with PowerShell Core 6.0 or higher on Windows systems. I haven't
+    tried DSC on Linux or macOS so I can't speak for those operating systems. To be
+    more specific, the commands in the PSDesiredStateConfiguration module do not
+    work on Windows systems due to the current implementation relying on WMI (Windows
+    Management Instrumentation) which does not exist in PowerShell Core. Currently,
+    you must use Windows PowerShell version 4 or higher for MOF based DSC resources
+    and Windows PowerShell version 5.0 or higher for class based DSC resources.
 
-There are several articles about PowerShell Core and the future direction of DSC on the
-PowerShell Team blog if you're interested in learning more.
-https://blogs.msdn.microsoft.com/powershell/
+    There are several articles about PowerShell Core and the future direction of DSC
+    on the PowerShell Team blog if you're interested in learning more.
+    https://blogs.msdn.microsoft.com/powershell/
+#>
 
-## Introduction
+#endregion
 
-Back in September of 2014, I discovered that there was a logic problem with the xRemoteDesktopAdmin
-DSC resource for configuring Remote Desktop that Microsoft had published on their TechNet Blog
-https://blogs.technet.microsoft.com/privatecloud/2014/08/22/writing-a-custom-dsc-resource-for-remote-desktop-rdp-settings/
-site and in their TechNet Script Repository https://gallery.technet.microsoft.com/xRemoteDesktopAdmin-dfc2f5a3.
+#region Introduction
 
-The Set-TargetResource function compares a string to an integer on line 89 of the xRemoteDesktopAdmin.psm1 file.
-The Ensure variable is a string that contains either "Present" or "Absent" and the GetEnsure variable is an
-integer that contains either 0 or 1. This causes the code in the "If" block on line 89 that compares the two to
-always run since they'll never be equal. To be fair, this code only runs if the Test-TargetResource function
-returns false, but the conditional logic that they're using is useless due to the way it's written.
+<#
+    Back in September of 2014, I discovered that there was a logic problem with the
+    xRemoteDesktopAdmin DSC resource for configuring Remote Desktop that Microsoft
+    had published on their TechNet Blog site and in their TechNet Script Repository.
+    https://blogs.technet.microsoft.com/privatecloud/2014/08/22/writing-a-custom-dsc-resource-for-remote-desktop-rdp-settings/
+    https://gallery.technet.microsoft.com/xRemoteDesktopAdmin-dfc2f5a3.
 
+    The Set-TargetResource function compares a string to an integer on line 89 of the
+    xRemoteDesktopAdmin.psm1 file. The Ensure variable is a string that contains either
+    "Present" or "Absent" and the GetEnsure variable is an integer that contains either
+    0 or 1. This causes the code in the "If" block on line 89 that compares the two to
+    always run since they'll never be equal. To be fair, this code only runs if the
+    Test-TargetResource function returns false, but the conditional logic that they're
+    using is useless due to the way it's written.
 
-This was back in the dark ages of DSC before Microsoft open sourced their DSC resources on GitHub
-https://github.com/PowerShell/DscResources which meant no forking a repository to fix the problem or submitting
-a pull request so everyone could benefit from one person taking the time to resolve the problem.
+    This was back in the dark ages of DSC before Microsoft open sourced their DSC
+    resources on GitHub which meant no forking a repository to fix the problem or
+    submitting a pull request so everyone could benefit from one person taking the
+    time to resolve the problem. https://github.com/PowerShell/DscResources 
 #>
 
 #endregion
@@ -86,66 +100,105 @@ a pull request so everyone could benefit from one person taking the time to reso
 #region Part 1 - Create a MOF Based DSC Resource to Configure Remote Desktop
 
 <#
-Part 1 of this demo demonstrates the process that I went through to write a custom DSC resource
-for configuring Remote Desktop using a MOF based PowerShell resource since Windows PowerShell
-version 4 was the current version at that point in time.
+    Part 1 of this demo demonstrates the process that I went through to write
+    a custom DSC resource for configuring Remote Desktop using a MOF based
+    PowerShell resource since Windows PowerShell version 4 was the current
+    version at that point in time.
 
-DSC (Desired State Configuration) was introduced in Windows PowerShell version 4.0. This initial
-version of DSC was limited to using MOF (Managed Object Format) based DSC resources.
+    DSC (Desired State Configuration) was introduced in Windows PowerShell
+    version 4.0. This initial version of DSC was limited to using MOF
+    (Managed Object Format) based DSC resources.
 
-Install the DSC Resource Designer Tool.
+    Install the DSC Resource Designer Tool.
+
+    First, download and install the xDscResourceDesigner PowerShell Module
+    from the PowerShell Gallery.
 #>
 
-#First, download and install the xDscResourceDesigner PowerShell Module from the PowerShell Gallery.
-
-Install-Module -Name xDSCResourceDesigner -Force
+#Install-Module -Name xDSCResourceDesigner -Force
 Get-Module -Name xDSCResourceDesigner -ListAvailable
 
 <#
-Install-Module exists in the PowerShellGet module which ships as part of Windows PowerShell version 5
-and higher. The PowerShellGet module can be downloaded as an MSI https://github.com/PowerShell/PowerShellGet
-and installed on Windows PowerShell version 3 or higher, although version 4 or higher is required for part 1
-of this demo. I presented a session on PowerShellGet at the PowerShell Summit in 2015 if you're interested
-in learning more.
-http://mikefrobbins.com/2015/04/23/powershellget-the-big-easy-way-to-discover-install-and-update-powershell-modules/
+    Install-Module exists in the PowerShellGet module which ships as part of Windows
+    PowerShell version 5 and higher. The PowerShellGet module can be downloaded as
+    an MSI and installed on Windows PowerShell version 3 or higher, although version
+    4 or higher is required for part 1 of this demo. I presented a session on PowerShellGet
+    at the PowerShell Summit in 2015 if you're interested in learning more.
+    https://github.com/PowerShell/PowerShellGet
+    http://mikefrobbins.com/2015/04/23/powershellget-the-big-easy-way-to-discover-install-and-update-powershell-modules/
 
-##Execution Policy
+    Execution Policy
 
-In order to use the DSC Resource Designer tool, the script execution policy must be set to Remote Signed or
-less restrictive.
+    In order to use the DSC Resource Designer tool, the script execution policy must
+    be set to Remote Signed or less restrictive.
 #>
 
 Get-ExecutionPolicy
 
 <#
-If the execution policy is set to AllSigned or the default of Restricted on the workstation you're
-designing DSC resources on, you'll receive an error message.
+    If the execution policy is set to AllSigned or the default of Restricted on the
+    workstation you're designing DSC resources on, you'll receive an error message.
 #>
 
-New-xDscResourceProperty –Name UserAuthentication –Type String –Attribute Key -ValidateSet 'Secure', 'NonSecure'
+$Params = @{
+    Name = 'UserAuthentication'
+    Type = 'String'
+    Attribute = 'Key'
+    ValidateSet = 'Secure', 'NonSecure'
+}
+
+New-xDscResourceProperty @Params
+
+#Import the module for more information (per the error message).
+
+Import-Module -Name xDSCResourceDesigner
 
 #Set the execution policy to Remote Signed or less
+
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Force
 Get-ExecutionPolicy
 
 <#
-DSC Resource Properties
+    DSC Resource Properties
 
-Decide which properties your resource will expose. There's a PowerShell team blog titled "Writing a custom DSC
-resource with MOF" that's a good resource for determining what properties are required and what each type qualifier
-is used for. https://docs.microsoft.com/en-us/powershell/dsc/authoringresourcemof
+    Decide which properties your resource will expose. There's a PowerShell team blog
+    titled "Writing a custom DSC resource with MOF" that's a good resource for determining
+    what properties are required and what each type qualifier is used for.
+    https://docs.microsoft.com/en-us/powershell/dsc/authoringresourcemof
 
-At least one "Key" property is required which uniquely identifies the resource instance.
-A "Write" property is optional when using it in a configuration script
+    At least one "Key" property is required which uniquely identifies the resource instance.
+    A "Write" property is optional when using it in a configuration script
 
-### Create the Skeleton for the DSC Resource
+    Create the Skeleton for the DSC Resource
 
-This can be accomplished with multiple lines of code.
+    This can be accomplished with multiple lines of code.
 #>
 
-$UserAuthentication = New-xDscResourceProperty –Name UserAuthentication –Type String –Attribute Key -ValidateSet 'Secure', 'NonSecure'
-$Ensure = New-xDscResourceProperty –Name Ensure –Type String –Attribute Write –ValidateSet 'Present', 'Absent'
-New-xDscResource –Name cMrRDP -Property $UserAuthentication, $Ensure -Path "$env:ProgramFiles\windowspowershell\modules\cMrRDP"
+$UserAuthParams = @{
+    Name = 'UserAuthentication'
+    Type = 'String'
+    Attribute = 'Key'
+    ValidateSet = 'Secure', 'NonSecure'
+}
+
+$UserAuthentication = New-xDscResourceProperty @UserAuthParams
+
+$EnsureParams = @{
+    Name = 'Ensure'
+    Type = 'String'
+    Attribute = 'Write'
+    ValidateSet = 'Present', 'Absent'
+}
+
+$Ensure = New-xDscResourceProperty @EnsureParams
+
+$cMrRdpParams = @{
+    Name = 'cMrRDP'
+    Property = $UserAuthentication, $Ensure
+    Path = "$env:ProgramFiles\windowspowershell\modules\cMrRDP"
+}
+
+New-xDscResource @cMrRdpParams
 
 #Or with a PowerShell one-liner.
 
@@ -153,63 +206,91 @@ New-xDscResource –Name cMrRDP -Property (New-xDscResourceProperty –Name User
 (New-xDscResourceProperty –Name Ensure –Type String –Attribute Write –ValidateSet 'Present', 'Absent') -Path "$env:ProgramFiles\WindowsPowerShell\Modules\cMrRDP"
 
 <#
-If you're a beginner, I'd recommend using the multiline option since it's more readable and
-easier to troubleshoot if you happen to run into any problems.
+    I recommend using the multiline option since it's more readable and easier to
+    troubleshoot if you happen to run into any problems.
 
-Naming Convention
+    Naming Convention
 
-Notice in the previous command, I added a prefix of "c" to the name of the DSC resource that
-I’m creating. That stands for "community". The recommendation at that point in time was to
-use the letter "c" as the prefix for community created DSC resources. The current recommendation
-is to no longer use the "c" prefix.
+    Notice in the previous command, I added a prefix of "c" to the name of the DSC
+    resource that I’m creating. That stands for "community". The recommendation at
+    that point in time was to use the letter "c" as the prefix for community created
+    DSC resources. The current recommendation is to no longer use the "c" prefix.
 
-Steven Murawski wrote a blog article titled "DSC People – Let’s Stop Using 'c' Now" that I
-recommend reading and Microsoft published an article on their PowerShell team blog titled
-"DSC Resource Naming Guidelines" that provides specific guidance on the currently recommended
-naming convention. Microsoft used "x" on many of their DSC resources which meant experimental,
-but it's my understanding that they'll also be dropping the "x" from their DSC resources moving
-forward.
+    Steven Murawski wrote a blog article titled "DSC People – Let’s Stop Using 'c' Now"
+    that I recommend reading and Microsoft published an article on their PowerShell
+    team blog titled "DSC Resource Naming Guidelines" that provides specific guidance
+    on the currently recommended naming convention. Microsoft used "x" on many of their
+    DSC resources which meant experimental, but it's my understanding that they'll also
+    be dropping the "x" from their DSC resources moving forward.
 
-https://stevenmurawski.com/2015/06/dsc-people-lets-stop-using-c-now/
-https://blogs.msdn.microsoft.com/powershell/2017/12/08/dsc-resource-naming-and-support-guidelines/
+    https://stevenmurawski.com/2015/06/dsc-people-lets-stop-using-c-now/
+    https://blogs.msdn.microsoft.com/powershell/2017/12/08/dsc-resource-naming-and-support-guidelines/
 
-### Exploring the Results of using the DSC Resource Kit Designer
+    Exploring the Results of using the DSC Resource Kit Designer
 
-The commands in the previous examples create the directory structure, a schema MOF file, a module
-manifest (PSD1 file), and a PowerShell script module (PSM1 file).
+    The commands in the previous examples create the directory structure, a schema MOF
+    file, a module manifest (PSD1 file), and a PowerShell script module (PSM1 file).
 
-#### The Schema MOF
+    The Schema MOF
 
-The schema MOF file uses a fairly cryptic syntax as shown in the following example. Notice there are
-both "Key" and "Write" type qualifiers in the MOF file itself which correspond to the properties created
-with the New-xDscResourceProperty command. The FriendlyName is what's used to refer to this DSC resource
-from within a DSC configuration.
+    The schema MOF file uses a fairly cryptic syntax as shown in the following example.
+    Notice there are both "Key" and "Write" type qualifiers in the MOF file itself which
+    correspond to the properties created with the New-xDscResourceProperty command. The
+    FriendlyName is what's used to refer to this DSC resource from within a DSC configuration.
 #>
 
 Start-Process "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP"
 
 #### The Module manifest
 
-#Create a module manifest for the PowerShell module that was created in the previous step.
-New-ModuleManifest -Path "$env:ProgramFiles\WindowsPowershell\Modules\cMrRDP\cMrRDP.psd1" -Author 'Mike F Robbins' -CompanyName 'mikefrobbins.com' -RootModule 'cMrRDP' -Description 'Module with DSC Resource for enabling RDP access to a Computer' -PowerShellVersion 4.0 -FunctionsToExport '*.TargetResource' -Verbose
+#Create a module manifest for the module that was created in the previous step.
 
-#A module manifest contains metadata about your module. All modules should have a module manifest regardless of whether or not they contain DSC resources.
+$ManifestParams = @{
+    Path = "$env:ProgramFiles\WindowsPowershell\Modules\cMrRDP\cMrRDP.psd1"
+    Author = 'Mike F Robbins'
+    CompanyName = 'mikefrobbins.com'
+    RootModule = 'cMrRDP'
+    Description = 'Module with DSC Resource for enabling RDP access to a Computer'
+    PowerShellVersion = '4.0'
+    FunctionsToExport = '*.TargetResource'
+    Verbose = $true
+}
+
+New-ModuleManifest @ManifestParams
+
+<#
+    A module manifest contains metadata about your module.
+    All modules should have a module manifest.
+#>
+
 psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\cMrRDP.psd1"
 
-#### The Script Module
+<#
+    The Script Module
 
-#Open up the script module file and you'll see the template code that was created which includes the three required functions, Get-TargetResource, Set-TargetResource, and Test-TargetResource.
+    The script module (PSM1 file) contains template code that was created by New-xDscResource.
+    
+    It includes the three required functions, Get-TargetResource, Set-TargetResource, and
+    Test-TargetResource.
+#>
+
 psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP\cMrRDP.psm1"
 
 #The Schema MOF
+
 psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP\cMrRDP.schema.mof"
 
 <#
-Get-TargetResource must return a hashtable.
-Set-TargetResource is only called if Test-TargetResource fails and it should configure whatever isn't in the desired state while not returning any results at all.
-Test-TargetResource is what's used to determine if the item specified in the configuration is in the desired state or not.
+    Get-TargetResource must return a hashtable.
 
-Write the Code for the Required Functions
+    Set-TargetResource is only called if Test-TargetResource fails and it should
+    configure whatever isn't in the desired state while not returning any results
+    at all.
+    
+    Test-TargetResource is what's used to determine if the item specified in the
+    configuration is in the desired state or not.
+
+    Write the Code for the Required Functions
 #>
 
 Set-Content -Path "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP\cMrRDP.psm1" -Value @'
@@ -341,53 +422,66 @@ Export-ModuleMember -Function *-TargetResource
 psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP\cMrRDP.psm1"
 
 <#
-### Consider Private Functions to Simplify
+    Consider Private Functions to Simplify
 
-#Sometimes it's more efficient to create private functions that the three required functions call if some of the
-same code is used by more than one of them. The Export-ModuleMember function is used to make sure that only these
-three functions are publically available if you decide to write any private functions.
+    Sometimes it's more efficient to create private functions that the three required
+    functions call if some of the same code is used by more than one of them. The
+    Export-ModuleMember function is used to make sure that only these three functions
+    are publically available if you decide to write any private functions.
 
-Export-ModuleMember -Function *-TargetResource
+    Export-ModuleMember -Function *-TargetResource
 
-#Taking advantage of the FunctionsToExport section of the module manifest eliminates the need to use
-Export-ModuleMember in the script module (PSM1) file to limit the publically available functions.
+    Taking advantage of the FunctionsToExport section of the module manifest eliminates
+    the need to use Export-ModuleMember in the script module (PSM1) file to limit the
+    publically available functions.
 #>
 
 
 ### Deploying your Custom DSC Resource
 
-Copy-Item -Path "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP" -Destination '\\server01\C$\Program Files\WindowsPowerShell\Modules' -Recurse -Force
+$DeployParams = @{
+    Path = "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP"
+    Destination = '\\server01\C$\Program Files\WindowsPowerShell\Modules'
+    Recurse = $true
+    Force = $true
+}
+
+Copy-Item @DeployParams
 
 <#
-This custom DSC resource needs to exist on any systems where a DSC configuration will be applied that relies this
-resource. With PowerShell version 4, automated deployment is only possible when using pull mode. There are several
-tutorials on the web for distributing a resource so I won’t duplicate that content here.
+    This custom DSC resource needs to exist on any systems where a DSC configuration
+    will be applied that relies this resource. With PowerShell version 4, automated
+    deployment is only possible when using pull mode. There are several tutorials on
+    the web for distributing a resource so I won’t duplicate that content here.
+
+    Create a simple DSC configuration to test the custom cMrRDP DSC resource.
 #>
 
-### Create a DSC configuration
-
-#Create a simple DSC configuration to test the custom cMrRDP DSC resource.
-
-
 configuration SetRemoteDesktop {
+
     Import-DscResource -ModuleName cMrRDP
+
     node SERVER01 {
+
         cMrRDP rdp {
             UserAuthentication = 'Secure'
             Ensure = 'Absent'
         }
 
     }
+
 }
 
-
-#Run the configuration. This creates a MOF configuration file that is specific to the specified node.
+<#
+    Run the configuration. This creates a MOF configuration file that is specific
+    to the referenced node.
+#>
 
 SetRemoteDesktop
 
 #Apply the previously created DSC configuration.
 
-Start-DscConfiguration -ComputerName SERVER01 -Path .\SetRemoteDesktop -Wait
+Start-DscConfiguration -ComputerName SERVER01 -Path .\SetRemoteDesktop -Wait -Verbose
 
 #Success! You've now created a MOF based DSC resource from scratch.
 
@@ -396,35 +490,49 @@ Start-DscConfiguration -ComputerName SERVER01 -Path .\SetRemoteDesktop -Wait
 #region Part 2 - Create a Class Based DSC Resource for Configuring Remote Desktop
 
 <#
-A few years ago while attending the MVP Summit, I mentioned that I wish someone would write a MOF based DSC
-resource and then rewrite the same resource as a Class based one so I could see the differences in both the
-process to create them along with the differences in the finished products. As far as I know, no one ever
-created anything like that. Once I learned how to create class based DSC resources, I decided to create and
-share that exact information with the community. My goal with sharing this information is to help others
-transition from creating MOF based DSC resources to creating class based ones without having them reinvent the wheel.
+    A few years ago while attending the MVP Summit, I mentioned that I wish someone
+    would write a MOF based DSC resource and then rewrite the same resource as a
+    Class based one so I could see the differences in both the process to create
+    them along with the differences in the finished products. As far as I know, no
+    one ever created anything like that. Once I learned how to create class based
+    DSC resources, I decided to create and share that exact information with the
+    community. My goal with sharing this information is to help others transition
+    from creating MOF based DSC resources to creating class based ones without having
+    to reinvent the wheel.
 
-As mentioned in Part 1, prior to PowerShell version 5 being released, I had written a PowerShell version 4
-compatible DSC resource named cMrRDP for configuring Remote Desktop. It only contained the three required
-functions, Get-TargetResource, Set-TargetResource, and Test-TargetResource. Much of the code was duplicated
-between these functions. A better approach would have been to create private functions within the resource
-which the required functions call. This design eliminates code duplication, makes troubleshooting easier,
-and simplifies both the code and the functions themselves. Since the functions are simpler, writing unit
-test for them is also simpler.
+    As mentioned in Part 1, prior to PowerShell version 5 being released, I had written
+    a PowerShell version 4 compatible DSC resource named cMrRDP for configuring Remote
+    Desktop. It only contained the three required functions, Get-TargetResource,
+    Set-TargetResource, and Test-TargetResource. Much of the code was duplicated between
+    these functions. A better approach would have been to create private functions within
+    the resource which the required functions call. This design eliminates code duplication,
+    makes troubleshooting easier, and simplifies both the code and the functions themselves.
+    Since the functions are simpler, writing unit test for them is also simpler.
 
-I decided to rewrite my DSC resource for configuring Remote Desktop as a class based DSC resource. The module for
-this new version is simply named "MrRemoteDesktop". This resource can also be found in my DSC repository on GitHub
-(https://github.com/mikefrobbins/DSC). Class based DSC resources require PowerShell version 5 on the system used
-for authoring the resource and on the system that the configuration is going to be applied to. With class based
-resources, Get(), Set(), and Test() methods take the place of the previously referenced required functions. One
-huge benefit to class based resources is that it doesn’t require a MOF file for the resource itself. This makes
-writing the resource simpler and modifications no longer require major rework or starting from scratch.
+    I decided to rewrite my DSC resource for configuring Remote Desktop as a class based
+    DSC resource. The module for this new version is simply named "MrRemoteDesktop". This
+    resource can also be found in my DSC repository on GitHub. Class based DSC resources
+    require PowerShell version 5 on the system used for authoring the resource and on the
+    system that the configuration is going to be applied to. With class based resources,
+    Get(), Set(), and Test() methods take the place of the previously referenced required
+    functions. One huge benefit to class based resources is that it doesn’t require a MOF
+    file for the resource itself. This makes writing the resource simpler and modifications
+    no longer require major rework or starting from scratch.
+    https://github.com/mikefrobbins/DSC
 
-The following code example has been saved as MrRemoteDesktop.psm1 in the
-"$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\" folder.
+    The following code example has been saved as MrRemoteDesktop.psm1 in the
+    "$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\" folder.
 #>
 
-New-Item -Path "$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\MrRemoteDesktop.psm1" -ItemType File -Force |
-Set-Content -Encoding UTF8 -Value @'
+$Params2 = @{
+    Path = "$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\MrRemoteDesktop.psm1"
+    ItemType = 'File'
+    Force = $true
+}
+
+New-Item @Params2
+
+Set-Content -Encoding UTF8 -Path "$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\MrRemoteDesktop.psm1" -Value @'
 enum Ensure {
     Absent
     Present
@@ -551,23 +659,42 @@ class RemoteDesktop {
 '@
 
 <#
-You’ll also need a module manifest file. The module manifest shown in the following example has been saved as
-MrRemoteDesktop.psd1 in the same folder as the script module file.
+    You’ll also need a module manifest file. The module manifest shown in the following
+    example has been saved as MrRemoteDesktop.psd1 in the same folder as the script module file.
 #>
 
-New-ModuleManifest -Path "$env:ProgramFiles\WindowsPowershell\Modules\MrRemoteDesktop\MrRemoteDesktop.psd1" -Author 'Mike F Robbins' -CompanyName 'mikefrobbins.com' -RootModule 'MrRemoteDesktop.psm1' -Description 'Module with DSC Resource for enabling RDP access to a Computer' -PowerShellVersion 5.0 -DscResourcesToExport RemoteDesktop -Verbose
+$ManifestParams2 = @{
+    Path = "$env:ProgramFiles\WindowsPowershell\Modules\MrRemoteDesktop\MrRemoteDesktop.psd1"
+    Author = 'Mike F Robbins'
+    CompanyName = 'mikefrobbins.com'
+    RootModule = 'MrRemoteDesktop.psm1'
+    Description = 'Module with DSC Resource for enabling RDP access to a Computer'
+    PowerShellVersion = '5.0'
+    DscResourcesToExport = 'RemoteDesktop'
+    Verbose = $true
+}
+
+New-ModuleManifest @ManifestParams2
 
 <#
-Remote Desktop is currently enabled on the server named SQL01 as shown in Figure 2.2.1.
-This server has the server core (no-GUI) installation of Windows Server 2012 R2 and I don’t want admins using
-remote desktop to connect to it. They should either use PowerShell to remotely administer it or install the GUI
-tools on their workstation or a server that’s dedicated for management of other systems (what I call a jump box).
+    Remote Desktop is currently enabled on the server named SQL01 as shown in Figure 2.2.1.
+    This server has the server core (no-GUI) installation of Windows Server 2012 R2 and I
+    don’t want admins using remote desktop to connect to it. They should either use
+    PowerShell to remotely administer it or install the GUI tools on their workstation or
+    a server that’s dedicated for management of other systems (what I call a jump box).
 
-A configuration to disable RDP is written, the MOF file for SQL01 is generated, and it’s applied using push mode:
+    A configuration to disable RDP is written, the MOF file for SQL01 is generated, and
+    it’s applied using push mode.
 #>
 
-Copy-Item -Path "$env:ProgramFiles\WindowsPowerShell\modules\MrRemoteDesktop" -Destination '\\server01\C$\Program Files\WindowsPowerShell\Modules' -Recurse -Force
+$DeployParams2 = @{
+    Path = "$env:ProgramFiles\WindowsPowerShell\modules\MrRemoteDesktop"
+    Destination = '\\server01\C$\Program Files\WindowsPowerShell\Modules'
+    Recurse = $true
+    Force = $true
+}
 
+Copy-Item @DeployParams2
 
 Configuration RDP {
     Import-DSCResource -ModuleName MrRemoteDesktop
@@ -583,6 +710,7 @@ Configuration RDP {
 }
 
 RDP
+
 Start-DscConfiguration -Path .\RDP -ComputerName SERVER01 -Wait -Verbose -Force
 
 #Now that the DSC configuration has been applied to SQL01, remote desktop on it is disabled:
@@ -591,9 +719,14 @@ Start-DscConfiguration -Path .\RDP -ComputerName SERVER01 -Wait -Verbose -Force
 
 #region Part 3 - Simplifying my Class Based DSC Resource for Configuring Remote Desktop
 
-#In Part 2 of this chapter, I wrote a class based DSC resource for configuring remote desktop. Since then I’ve discovered and learned a couple of new things about enumerations in PowerShell that can be used to simply the code even further.
+<#
+    In Part 2 of this demo, I wrote a class based DSC resource for configuring remote desktop.
+    Since then I’ve discovered and learned a couple of new things about enumerations in PowerShell
+    that can be used to simply the code even further.
 
-#My original code used a couple of enumerations which I’ve removed to show how they can be used to further simply the code:
+    My original code used a couple of enumerations which I’ve removed to show how they can be
+    used to further simply the code:
+#>
 
 class RemoteDesktop {
 
@@ -642,7 +775,11 @@ class RemoteDesktop {
 
 }
 
-#The code shown in the previous example uses switch statements to translate the numeric values returned from the registry into human readable names. There are several different ways to instantiate a copy of the RemoteDesktop class and call the Get() method:
+<#
+    The code shown in the previous example uses switch statements to translate the numeric
+    values returned from the registry into human readable names. There are several different
+    ways to instantiate a copy of the RemoteDesktop class and call the Get() method.
+#>
 
 (New-Object -TypeName RemoteDesktop).Get()
 
@@ -652,7 +789,7 @@ $RDP = [RemoteDesktop]::new()
 $RDP.Get()
 
 
-#I’ll remove the switch statements to show that numeric values are indeed returned without them:
+#I’ll remove the switch statements to show that numeric values are indeed returned without them.
 
 
 class RemoteDesktop {
@@ -694,8 +831,11 @@ class RemoteDesktop {
 
 ([RemoteDesktop]::new()).Get()
 
-#My original code, previously referenced from Part 2 of this chapter, used enumerations instead of ValidateSet, but I’ve since learned that enumerations in PowerShell offer a lot more functionality than just input validation.
-
+<#
+    My original code, previously referenced from Part 2 of this demo, used enumerations
+    instead of ValidateSet, but I’ve since learned that enumerations in PowerShell offer a
+    lot more functionality than just input validation.
+#>
 
 enum UserAuthenication {
     NonSecure
@@ -745,10 +885,15 @@ class RemoteDesktop {
 
 ([RemoteDesktop]::new()).Get()
 
-#By simply using the enumerations, the values are automatically translated from their numeric values returned from the registry into their human readable names that are defined in the enumeration so there’s no need to perform the translation with switch statements.
+<#
+    By simply using the enumerations, the values are automatically translated from their numeric
+    values returned from the registry into their human readable names that are defined in the
+    enumeration so there’s no need to perform the translation with switch statements.
 
-#The only problem at this point is the incorrect value is being return by the Ensure enumeration. By default the first item in the enumeration is 0, the second one is 1, and so on. I could simply swap the order of the two items in the Ensure enumeration to correct this problem:
-
+    The only problem at this point is the incorrect value is being return by the Ensure enumeration.
+    By default the first item in the enumeration is 0, the second one is 1, and so on. I could
+    simply swap the order of the two items in the Ensure enumeration to correct this problem.
+#>
 
 enum Ensure {
     Present
@@ -756,8 +901,10 @@ enum Ensure {
 }
 
 
-#A better option is to be more declarative and define the value of each item in the enumerations so the order doesn’t matter:
-
+<#
+    A better option is to be more declarative and define the value of each item in the enumerations
+    so the order doesn’t matter.
+#>
 
 enum UserAuthenication {
     NonSecure = 0
@@ -769,7 +916,10 @@ enum Ensure {
 }
 
 
-#Although the code was already simple, the end result after refactoring it is even simpler code and less of it:
+<#
+    Although the code was already simple, the end result after refactoring it is even simpler
+    code and less of it.
+#>
 
 Set-Content -Path "$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\MrRemoteDesktop.psm1" -Encoding UTF8 -Value @'
 enum UserAuthenication {
@@ -865,18 +1015,34 @@ class RemoteDesktop {
 }
 '@
 
-Copy-Item -Path "$env:ProgramFiles\WindowsPowerShell\modules\MrRemoteDesktop" -Destination '\\server01\C$\Program Files\WindowsPowerShell\Modules' -Recurse -Force
+$DeployParams3 = @{
+    Path = "$env:ProgramFiles\WindowsPowerShell\modules\MrRemoteDesktop"
+    Destination = '\\server01\C$\Program Files\WindowsPowerShell\Modules'
+    Recurse = $true
+    Force = $true
+}
+
+Copy-Item @DeployParams3
 
 Start-DscConfiguration -Path .\RDP -ComputerName SERVER01 -Wait -Verbose -Force
 
-#As shown in the previous code example, I also decided to move the code from the SetAuthSetting() and SetTSSetting() methods back into the actual Set() method since other methods don’t call them which means that there’s no redundant code eliminated by separating them and separating them adds complexity.
+<#
+    As shown in the previous code example, I also decided to move the code from the
+    SetAuthSetting() and SetTSSetting() methods back into the actual Set() method since
+    other methods don’t call them which means that there’s no redundant code eliminated
+    by separating them and separating them adds complexity.
 
-#The updated version of the PowerShell Desired State Configuration Class Based Resource for Configuring Remote Desktop shown in this blog article can be downloaded from [my DSC repository on GitHub](https://github.com/mikefrobbins/DSC).
+    The updated version of the PowerShell Desired State Configuration Class Based Resource
+    for Configuring Remote Desktop shown in this blog article can be downloaded from my DSC
+    repository on GitHub. https://github.com/mikefrobbins/DSC
+#>
 
 #endregion
 
 #region Cleanup
 
+$Path = 'C:\Demo'
+Get-ChildItem -Path $Path | Remove-Item -Recurse
 Set-ExecutionPolicy -ExecutionPolicy Restricted -Force
 Remove-Item -Path "$env:ProgramFiles\WindowsPowerShell\Modules\cMrRDP" -Recurse -ErrorAction SilentlyContinue
 Remove-Item -Path C:\demo\SetRemoteDesktop -Recurse -ErrorAction SilentlyContinue
@@ -892,5 +1058,9 @@ Invoke-Command -ComputerName SERVER01 {
     Get-NetFirewallRule -DisplayGroup 'Remote Desktop' |
     Set-NetFirewallRule -Enabled True
 }
+
+Set-Location -Path C:\
+$psISE.Options.Zoom = 100
+$host.PrivateData.ErrorForegroundColor = 'red'
 
 #endregion
