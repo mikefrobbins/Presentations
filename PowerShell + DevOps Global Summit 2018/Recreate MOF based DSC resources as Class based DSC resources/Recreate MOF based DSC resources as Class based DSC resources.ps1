@@ -127,11 +127,9 @@ Get-ExecutionPolicy
 
     At least one "Key" property is required which uniquely identifies the resource instance.
     A "Write" property is optional when using it in a configuration script
-
-    Create the Skeleton for the DSC Resource
-
-    This can be accomplished with multiple lines of code.
 #>
+
+#Create the Skeleton for the DSC Resource. This can be accomplished with multiple lines of code.
 
 $UserAuthParams = @{
     Name = 'UserAuthentication'
@@ -159,7 +157,7 @@ $cMrRdpParams = @{
 
 New-xDscResource @cMrRdpParams
 
-#Or with a PowerShell one-liner.
+#This could also be accomplished using a PowerShell one-liner.
 
 #New-xDscResource –Name cMrRDP -Property (New-xDscResourceProperty –Name UserAuthentication –Type String –Attribute Key -ValidateSet 'Secure', 'NonSecure'),
 #(New-xDscResourceProperty –Name Ensure –Type String –Attribute Write –ValidateSet 'Present', 'Absent') -Path "$env:ProgramFiles\WindowsPowerShell\Modules\cMrRDP"
@@ -181,7 +179,7 @@ New-xDscResource @cMrRdpParams
     file, a module manifest (PSD1 file), and a PowerShell script module (PSM1 file).
 #>
 
-Start-Process "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP"
+Start-Process "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP"
 
 #**********************************************************************************
 #### The Module manifest
@@ -214,12 +212,12 @@ psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\cMrRDP.psd
 #***********************************************************************************
 
 <#
-    The script module (PSM1 file) contains template code that was created by New-xDscResource.
+    The script module (PSM1 file) now contains template code that was created by New-xDscResource.
     
     It includes the three required functions:
-        Get-TargetResource
-        Set-TargetResource
-        Test-TargetResource
+    Get-TargetResource
+    Set-TargetResource
+    Test-TargetResource
 #>
 
 psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP\cMrRDP.psm1"
@@ -237,7 +235,7 @@ psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResourc
 
 psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP\cMrRDP.schema.mof"
 
-#Write the Code for the Required Functions
+#Write the Code for the three required functions
 
 Set-Content -Path "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP\cMrRDP.psm1" -Value @'
 function Get-TargetResource {
@@ -365,6 +363,8 @@ function Test-TargetResource {
 Export-ModuleMember -Function *-TargetResource
 '@
 
+#Show the updated script module (PSM1 file)
+
 psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\modules\cMrRDP\DSCResources\cMrRDP\cMrRDP.psm1"
 
 ### Deploying your Custom DSC Resource
@@ -388,7 +388,6 @@ Copy-Item @DeployParams
 #>
 
 configuration SetRemoteDesktop {
-
     Import-DscResource -ModuleName cMrRDP
 
     node SERVER01 {
@@ -399,7 +398,6 @@ configuration SetRemoteDesktop {
         }
 
     }
-
 }
 
 <#
@@ -413,7 +411,21 @@ SetRemoteDesktop
 
 Start-DscConfiguration -ComputerName SERVER01 -Path .\SetRemoteDesktop -Wait -Verbose
 
-#Success! You've now created a MOF based DSC resource from scratch.
+#Success! You've now created a MOF based DSC resource from scratch and applied it to a server.
+
+#Cleanup
+$Path = 'C:\Demo'
+Get-ChildItem -Path $Path | Remove-Item -Recurse
+
+Invoke-Command -ComputerName SERVER01 {
+    Remove-Item -Path "$env:ProgramFiles\WindowsPowerShell\Modules\cMrRDP" -Recurse -ErrorAction SilentlyContinue
+
+    Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp' -Name 'UserAuthentication' -Value 1
+    Set-ItemProperty -Path 'HKLM:\System\CurrentControlSet\Control\Terminal Server' -Name 'fDenyTSConnections' -Value 0
+
+    Get-NetFirewallRule -DisplayGroup 'Remote Desktop' |
+    Set-NetFirewallRule -Enabled True
+}
 
 #endregion
 
@@ -626,7 +638,7 @@ RDP
 
 Start-DscConfiguration -Path .\RDP -ComputerName SERVER01 -Wait -Verbose -Force
 
-#Now that the DSC configuration has been applied to SQL01, remote desktop on it is disabled:
+#Now that the DSC configuration has been applied to Server01, remote desktop on it is disabled.
 
 #endregion
 
@@ -636,11 +648,11 @@ Start-DscConfiguration -Path .\RDP -ComputerName SERVER01 -Wait -Verbose -Force
     I discovered and learned a couple of new things about enumerations in PowerShell
     that can be used to simply the code even further.
 
-    My original code used a couple of enumerations which I’ve removed to show how they can be
-    used to further simply the code:
+    My original code used a couple of enumerations which I’ve removed to show how they
+    can be used to further simply the code.
 #>
 
-class RemoteDesktop {
+class RemoteDesktop1 {
 
     [DscProperty(Key)]
     [string]$UserAuthenication
@@ -648,7 +660,7 @@ class RemoteDesktop {
     [DscProperty(Mandatory)]
     [string]$Ensure
 
-    [RemoteDesktop]Get() {
+    [RemoteDesktop1]Get() {
 
         $this.UserAuthenication = $this.GetAuthSetting()
         $this.Ensure = $this.GetTSSetting()
@@ -695,16 +707,16 @@ class RemoteDesktop {
     call the Get() method.
 #>
 
-(New-Object -TypeName RemoteDesktop).Get()
+(New-Object -TypeName RemoteDesktop1).Get()
 
-([RemoteDesktop]::new()).Get()
+([RemoteDesktop1]::new()).Get()
 
-$RDP = [RemoteDesktop]::new()
+$RDP = [RemoteDesktop1]::new()
 $RDP.Get()
 
 #Remove the switch statements to show that numeric values are indeed returned without them.
 
-class RemoteDesktop {
+class RemoteDesktop2 {
 
     [DscProperty(Key)]
     [string]$UserAuthenication
@@ -712,7 +724,7 @@ class RemoteDesktop {
     [DscProperty(Mandatory)]
     [string]$Ensure
 
-    [RemoteDesktop]Get() {
+    [RemoteDesktop2]Get() {
 
         $this.UserAuthenication = $this.GetAuthSetting()
         $this.Ensure = $this.GetTSSetting()
@@ -741,7 +753,7 @@ class RemoteDesktop {
 
 }
 
-([RemoteDesktop]::new()).Get()
+([RemoteDesktop2]::new()).Get()
 
 <#
     My code from Part 2 of this demo used enumerations instead of ValidateSet, but I’ve
@@ -758,7 +770,7 @@ enum Ensure {
     Present
 }
 
-class RemoteDesktop {
+class RemoteDesktop3 {
 
     [DscProperty(Key)]
     [UserAuthenication]$UserAuthenication
@@ -766,7 +778,7 @@ class RemoteDesktop {
     [DscProperty(Mandatory)]
     [Ensure]$Ensure
 
-    [RemoteDesktop]Get() {
+    [RemoteDesktop3]Get() {
 
         $this.UserAuthenication = $this.GetAuthSetting()
         $this.Ensure = $this.GetTSSetting()
@@ -795,7 +807,7 @@ class RemoteDesktop {
 
 }
 
-([RemoteDesktop]::new()).Get()
+([RemoteDesktop3]::new()).Get()
 
 <#
     By simply using the enumerations, the values are automatically translated from their numeric
@@ -807,26 +819,28 @@ class RemoteDesktop {
     simply swap the order of the two items in the Ensure enumeration to correct this problem.
 #>
 
-enum Ensure {
-    Present
-    Absent
-}
-
+<#
+    enum Ensure {
+        Present
+        Absent
+    }
+#>
 
 <#
     A better option is to be more declarative and define the value of each item in the enumerations
     so the order doesn’t matter.
 #>
 
-enum UserAuthenication {
-    NonSecure = 0
-    Secure = 1
-}
-enum Ensure {
-    Absent = 1
-    Present = 0
-}
-
+<#
+    enum UserAuthenication {
+        NonSecure = 0
+        Secure = 1
+    }
+    enum Ensure {
+        Absent = 1
+        Present = 0
+    }
+#>
 
 <#
     Although the code was already simple, the end result after refactoring it is even simpler
@@ -926,6 +940,9 @@ class RemoteDesktop {
 
 }
 '@
+
+#Show the updated script module (PSM1 file)
+psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\MrRemoteDesktop.psm1"
 
 #Deploy the resource
 
