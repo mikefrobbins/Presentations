@@ -14,24 +14,12 @@
 
 throw "You're not supposed to run the entire script"
 
-<#
-    The code in this region was stolen, I mean borrowed from Thomas Rayner (@MrThomasRayner).
-    For more information, see:
-    http://mikefrobbins.com/2017/11/02/safety-to-prevent-entire-script-from-running-in-the-powershell-ise/
-#>
-
 #endregion
 
 #region Presentation Prep
 
-#Set PowerShell ISE Zoom to 175%
-$psISE.Options.Zoom = 175
-
-<#
-    Presentation Tip: when using the #PowerShell console, modify the error color for better
-    readability AND audience members with Color Blindness. - Michael Bender
-    https://twitter.com/MichaelBender/status/983485482423078913
-#>
+#Set PowerShell ISE Zoom to 150%
+$psISE.Options.Zoom = 150
 
 #Set error messages to yellow
 $host.PrivateData.ErrorForegroundColor = 'yellow'
