@@ -1287,11 +1287,8 @@ explorer.exe $Path\PlasterTemplate
     downloaded from my PlasterTemplate repository on GitHub.
     https://github.com/mikefrobbins/PlasterTemplate
 
-    If you're interested in learning more about Plaster, consider attending the
-    following session.
-
-    Creating PowerShell Projects and more with Plaster - Wednesday, April 12th at 3pm
-    https://powershelldevopsglobalsummit2018.sched.com/event/CrVY/creating-powershell-projects-and-more-with-plaster
+    Creating PowerShell Projects and more with Plaster by Rob Pleau
+    https://www.youtube.com/watch?v=3cjB9-84Xgw
 #>
 
 #endregion
@@ -1330,11 +1327,8 @@ Invoke-ScriptAnalyzer -Path "$Path\MrTestModule"
 
     PSScriptAnalyzer https://github.com/PowerShell/PSScriptAnalyzer
 
-    If you're interested in learning more about PSScriptAnalyzer, consider
-    attending the following session.
-
-    A Crash Course in Writing Your Own PSScriptAnalyzer Rules - Thursday, April 12th at 10am
-    https://powershelldevopsglobalsummit2018.sched.com/event/Cqi6/a-crash-course-in-writing-your-own-psscriptanalyzer-rules
+    A Crash Course in Writing Your Own PSScriptAnalyzer Rules by Thomas Rayner
+    https://www.youtube.com/watch?v=_T8wLsbTWJY&t=1s
 #>
 
 #endregion
@@ -1375,12 +1369,13 @@ function Get-MrSystemInfo {
 #Open the new script module file in the ISE
 psEdit -filenames "$Path\MrTestModule\Get-MrSystemInfo.ps1"
 
-Test-MrFunctionsToExport -ManifestPath $Path\MrTestModule\MrTestModule.psd1
+#Get a list of the function in the module folder
 Get-MrFunctionsToExport -Path $Path\MrTestModule
 
 #Add this newly created function to the list of functions to export in the manifest
 Update-ModuleManifest -Path "$Path\MrTestModule\MrTestModule.psd1" -FunctionsToExport Get-MrSystemInfo
 
+#Test to make sure all of the functions in the modules folder exists in the FunctionToExport section of the manifest
 Test-MrFunctionsToExport -ManifestPath $Path\MrTestModule\MrTestModule.psd1
 
 #Import the module
@@ -1648,17 +1643,30 @@ Get-MrSystemInfo | Get-Member
     Don't hard code Format-* commands into your functions because it limits
     their functionality and their reusability.
 
-    No semicolons at the end of lines.
+    There's no need to use semicolons at the end of lines.
 
-    Don't use Write-Host
+    Don't use Write-Host.
 
-    Use single quotes for literals
-    Only use double quotes when something inside the quotes needs expanding such as a variable
+    Use single quotes for literals.
+    Only use double quotes when something inside the quotes needs expanding such as a variable.
 
-    Coding style
-    Indentation style
-    Be consitent - Pick a coding style and stick to it.
-#>
+    Coding style - Be consitent. Pick a coding style and stick to it.
+    Indentation style - I use Stroustrup style (no cuddled else).
+
+    function Get-Soemthing {
+        if($true) {
+            Write-Output 'Do Something'    
+        } 
+        else {
+            Write-Output 'Do something else'
+        }
+    }
+    
+
+    https://github.com/PoshCode/PowerShellPracticeAndStyle/issues/24#issuecomment-106860973
+    https://en.wikipedia.org/wiki/Indentation_style
+    
+#> 
 
 #endregion
 
