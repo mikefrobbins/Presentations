@@ -562,7 +562,7 @@ class RemoteDesktop {
 }
 '@
 
-#Show the script module (PSMa 1 file)
+#Show the script module (PSM1 file)
 psEdit -filenames "$env:ProgramFiles\WindowsPowerShell\Modules\MrRemoteDesktop\MrRemoteDesktop.psm1"
 
 <#
