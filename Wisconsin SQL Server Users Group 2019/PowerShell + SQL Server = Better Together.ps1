@@ -45,6 +45,12 @@ Clear-Host
 #Start-Process https://mikefrobbins.com/2018/10/03/use-powershell-to-install-the-remote-server-administration-tools-rsat-on-windows-10-version-1809/
 #Get-WindowsCapability -Name RSAT* -Online | Add-WindowsCapability -Online
 
+#I've also install two modules that I wrote which are also available in the PowerShell Gallery
+#Install-Module -Name MrToolkit, MrSQL
+Import-Module -Name MrToolKit
+Import-Module -Name MrSQL
+Import-Module -Name ActiveDirectory, SQLServer
+
 #Execution Policy
 
 #Show the current execution policy
@@ -64,6 +70,10 @@ Get-Module -ListAvailable
 #are automatically imported when one of its cmdlets is used
 $env:PSModulePath -split ';'
 
+($env:PSModulePath -split ';')[0]
+($env:PSModulePath -split ';')[1]
+($env:PSModulePath -split ';')[2]
+
 #Deserialized objects
 
 #One-To-Many Remoting
@@ -73,11 +83,12 @@ Invoke-Command -ComputerName dc01, sql05, sql08, sql12, sql14, sql16, sql17 {
 
 Invoke-Command -ComputerName sql12, sql14, sql16, sql17 {
     Get-Module -Name SQLPS -ListAvailable
-}
+} | Format-Table -Property ModuleType, Version, Name, ExportedCommands, PSComputerName
 
 #One-To-One Remoting
 
 Enter-PSSession -ComputerName sql08
+Set-Location -Path C:\
 
 $env:COMPUTERNAME
 
@@ -100,33 +111,46 @@ Get-Command -Module SQLServer*
 Exit-PSSession
 
 Enter-PSSession -ComputerName sql12
+Set-Location -Path C:\
 Import-Module -Name SQLPS
 Get-Module -Name SQLPS -ListAvailable
-Get-PSSnapin -Name SQLPS
+Get-Command -Module SQLPS
+(Get-Command -Module SQLPS).Count
 Exit-PSSession
 
 #Note the warning message and the current location is changed
 Enter-PSSession -ComputerName sql14
 Set-Location -Path C:\
 Import-Module -Name SQLPS
+Get-Module -Name SQLPS -ListAvailable
+Get-Command -Module SQLPS
+(Get-Command -Module SQLPS).Count
 Exit-PSSession
 
 Enter-PSSession -ComputerName sql16
 Set-Location -Path C:\
 Import-Module -Name SQLPS
+Get-Module -Name SQLPS -ListAvailable
+Get-Command -Module SQLPS
+(Get-Command -Module SQLPS).Count
 Exit-PSSession
 
-#Unload the SQLPS module
-Set-Location -Path C:\Demo
-
-#What commands exist in the SQLPS module?
+Enter-PSSession -ComputerName sql17
+Set-Location -Path C:\
+Import-Module -Name SQLPS
+Get-Module -Name SQLPS -ListAvailable
 Get-Command -Module SQLPS
-Get-Command -Module SQL*
+(Get-Command -Module SQLPS).Count
+Exit-PSSession
 
-#We'll talk about Snap-ins when we cover remoting
+#What commands exist in the SQLServer PowerShell module?
+Get-Command -Module SQLServer
+(Get-Command -Module SQLServer).Count
+
+Get-Command -Module dbatools
+(Get-Command -Module dbatools).Count
 
 #endregion
-
 
 #region Running TSQL code and Stored Procedures from PowerShell
 
@@ -210,11 +234,32 @@ Get-SqlDatabase -ServerInstance SQL12
 
 (Get-SqlDatabase -ServerInstance SQL12 | Get-Member).TypeName[0]
 
+Get-SqlAgentJob -ServerInstance SQL12
+
+Get-Command -Noun SqlAgentJob
+
+Get-SqlAgentJob -ServerInstance SQL12 | Get-Member -MemberType Method
+
+(Get-SqlAgentJob -ServerInstance SQL12 -Name Backup.Subplan_1).Start()
+
+#endregion
+
+#region dbatools
+
+Get-DbaDatabase -SqlInstance SQL12
+
+(Get-DbaDatabase -SqlInstance SQL12 | Get-Member).TypeName[0]
+
+Invoke-DbaQuery -SqlInstance SQL12 -Database master -Query "
+    select name from sys.databases
+"
+
+Get-DbaBackupHistory -SqlInstance SQL12 -Database AdventureWorks2012
+
 #endregion
 
 #region .NET Framework
 
-Import-Module -Name MrSQL
 
 Get-Module -Name MrSQL -ListAvailable
 
@@ -256,8 +301,6 @@ Invoke-Sqlcmd2 -ServerInstance SQL05 -Database msdb -Query "
 #endregion
 
 #region Create AD User from SQL Database
-
-Import-Module -Name ActiveDirectory, SQLServer
 
 #Query the AdventureWorks2012 database on SQL12
 Invoke-Sqlcmd -ServerInstance sql12 -Database AdventureWorks2012 -Query '
