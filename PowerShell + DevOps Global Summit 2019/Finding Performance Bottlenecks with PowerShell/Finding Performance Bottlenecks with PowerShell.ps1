@@ -36,10 +36,11 @@ Clear-Host
 #region Demo Environment
 
 <#
-    A single workstation running Windows 10 version 1809 is used throughout this demo. It’s running
-    Windows PowerShell version 5.1 which ships in the box with that operating system. PowerShell
-    must be run elevated as an administrator and the execution policy must be set to remote signed
-    or less restrictive for some of the examples in this demo to complete successfully.
+    A workstation running Windows 10 version 1809 and a domain controller running Windows Server
+    2019 (server core installation) is used throughout this demo. They're running Windows PowerShell
+    version 5.1 which ships in the box with those operating systems. PowerShell must be run elevated
+    as an administrator and the execution policy must be set to remote signed or less restrictive
+    for some of the examples in this demo to complete successfully.
 #>
 
 Get-ExecutionPolicy
@@ -50,6 +51,23 @@ Get-ExecutionPolicy
     Some of the cmdlets used in this demo do not exist in PowerShell Core.
     Specifically, the Get-Counter cmdlet.
 #>
+
+#Cntl + Shift + T and open a PowerShell Core terminal
+$PSVersionTable.PSVersion
+Get-Command -Module Microsoft.PowerShell.Diagnostics
+
+Get-Counter -Counter '\Processor(*)\% Processor Time'
+Get-CimInstance -ClassName Win32_PerfFormattedData_Counters_ProcessorInformation -Filter "Name = '_Total'"
+
+$Counter = New-Object -TypeName System.Diagnostics.PerformanceCounter('Processor Information', '% Processor Time', '_Total')
+$Counter
+
+while($true){
+    $Counter.NextValue()
+    Start-Sleep -Milliseconds 150
+}
+
+"\\$env:COMPUTERNAME\$($Counter.CategoryName -replace '\s.*$')($($Counter.InstanceName))\$($Counter.CounterName) :`r`n $($Counter.NextValue())"
 
 #endregion
 
@@ -78,8 +96,6 @@ Get-ExecutionPolicy
     One of the reasons I chose to speak on this topic is because the Get-Counter cmdlet is not very
     intuitive and the results for it aren’t what I would call a great object-oriented design.
 #>
-
-#*******************************Slide 7***************************************
 
 #endregion
 
@@ -111,7 +127,7 @@ Get-Counter -ListSet * | Get-Member -MemberType Properties
 Get-Counter -ListSet * | Select-Object -First 1 -Property *
 
 <#
-    CounterSetName is one of the properties returned when using the ListSet parameter of Get-Counter. It
+    CounterSetName is one of the properties returned when using the ListSet parameter of Get-Counter. Its
     property returns the category for a group of performance counters. A list of all the CounterSetNames
     can easily be determined by simply returning that single property.
 #>
@@ -128,21 +144,19 @@ Clear-Host
 Clear-Host
 (Get-Counter -ListSet *disk*).CounterSetName
 
-<#
-    The Counter property returns the list of counters which are grouped into that category.
-#>
-
-Clear-Host
-(Get-Counter -ListSet PhysicalDisk).Counter
-
 #endregion
 
 #region Finding Performance Counter Names
 
 <#
-    Once you’ve narrowed your choice down to a specific CounterSetName, the performance counter
-    names themselves can be determine by returning the Paths property.
+    Once you’ve narrowed your choice down to a specific category with CounterSetName,
+    the performance counter names themselves can be determine by returning the Counter property.
 #>
+
+Clear-Host
+(Get-Counter -ListSet PhysicalDisk).Counter
+
+#The Paths property returns the same thing as the Counter property
 
 Clear-Host
 (Get-Counter -ListSet PhysicalDisk).Paths
@@ -150,10 +164,13 @@ Clear-Host
 #Notice that the Paths and Counters properties return the same thing
 
 Clear-Host
-Get-Counter -ListSet LogicalDisk
+Get-Counter -ListSet PhysicalDisk
 
 Clear-Host
 Compare-Object -ReferenceObject (Get-Counter -ListSet PhysicalDisk).Counter -DifferenceObject (Get-Counter -ListSet PhysicalDisk).Paths
+
+#Counter is an alias property of Paths
+Get-Counter -ListSet PhysicalDisk | Get-Member -MemberType Properties
 
 #endregion
 
@@ -201,6 +218,7 @@ Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time' | Get-Member -MemberType Pro
     
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples.Count
+(Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples | Get-Member
 
 <#
     Then there’s the Readings property which returns all instances of a particular
@@ -209,6 +227,7 @@ Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time' | Get-Member -MemberType Pro
 
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').Readings
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').Readings.Count
+(Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').Readings | Get-Member
 
 <#
     Clearly, CounterSamples is the easier of the two when choosing between the properties that return
