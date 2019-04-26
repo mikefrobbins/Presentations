@@ -218,7 +218,7 @@ Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time' | Get-Member -MemberType Pro
     
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples.Count
-(Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples | Get-Member
+((Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples | Get-Member).TypeName[0]
 
 <#
     Then there’s the Readings property which returns all instances of a particular
@@ -227,7 +227,7 @@ Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time' | Get-Member -MemberType Pro
 
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').Readings
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').Readings.Count
-(Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').Readings | Get-Member
+((Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').Readings | Get-Member).TypeName[0]
 
 <#
     Clearly, CounterSamples is the easier of the two when choosing between the properties that return
@@ -248,7 +248,8 @@ $_.Path -replace "^\\\\$env:COMPUTERNAME\\|\(.*$"}},
 @{label='Counter';expression={$_.Path -replace '^.*\\'}},
 @{label='Instance';expression={$_.InstanceName}},
 @{label='Value';expression={$_.CookedValue}},
-@{label='TimeStamp';expression={$_.TimeStamp}}
+@{label='TimeStamp';expression={$_.TimeStamp}} |
+Format-Table -AutoSize
 
 <#
     Luckily the format for the results is the same for all performance counters, or at least I haven’t run
@@ -264,6 +265,8 @@ Invoke-Command -ComputerName DC01 {
     Get-Counter
 }
 
+#My regular expression doesn't work properly because of the extra backslash after the computer name when querying remote computers
+
 (Get-Counter -ComputerName DC01 -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples |
 Select-Object -Property @{label='ComputerName';expression={
 $_.Path -replace '^\\\\|\\.*$'}},
@@ -272,7 +275,8 @@ $_.Path -replace "^\\\\$env:COMPUTERNAME\\|\(.*$"}},
 @{label='Counter';expression={$_.Path -replace '^.*\\'}},
 @{label='Instance';expression={$_.InstanceName}},
 @{label='Value';expression={$_.CookedValue}},
-@{label='TimeStamp';expression={$_.TimeStamp}}
+@{label='TimeStamp';expression={$_.TimeStamp}} |
+Format-Table -AutoSize
 
 #endregion
 
@@ -284,7 +288,7 @@ $_.Path -replace "^\\\\$env:COMPUTERNAME\\|\(.*$"}},
     at the same time without having to call Get-Counter for each individual one.
 #>
 
-help Get-Counter -Parameter Counter
+#help Get-Counter -Parameter Counter 
 Get-Command -Name Get-Counter -Syntax
 
 <#
@@ -297,7 +301,8 @@ Get-Command -Name Get-Counter -Syntax
     In the following example, the Get-MrTop10Counter function is being run against the local computer.
 #>
 
-Get-MrTop10Counter | Where-Object Instance -like '*c:'
+Get-MrTop10Counter | Where-Object Instance -like '*c:' |
+Format-Table -AutoSize
 
 <#
     It’s difficult to determine if the value returned by a specific performance counter is normal or not
@@ -313,7 +318,7 @@ Get-MrTop10Counter | Where-Object Instance -like '*c:'
 <#
     While querying performance counters with PowerShell is relatively easy as shown in the previous
     portion of this demo, who really wants to query each one of them and validate they’re within an
-    acceptable range manually? I’m assuming that no one does since all I’m hearing is crickets.
+    acceptable range manually? I’m assuming that no one does.
 #>
 
 #endregion
@@ -321,7 +326,7 @@ Get-MrTop10Counter | Where-Object Instance -like '*c:'
 #region Pester
 
 <#
-    In this section, we’ll use Pester to automate the testing of whether or not the performance counter
+    In this section, I’ll use Pester to automate the testing of whether or not the performance counter
     values returned by Get-MrTop10Counter are within their recommended ranges.
 
     Pester is an open-source Behavior-Driven Development (BDD) based framework for PowerShell.
@@ -332,7 +337,7 @@ Get-MrTop10Counter | Where-Object Instance -like '*c:'
     I recommend installing the latest version of Pester from the PowerShell Gallery. While Update-
     Module may work depending on whether or not you’ve previously updated Pester, the following
     command will work regardless of which version you currently have installed as long as the computer
-    it’s being run on is connected to the Internet.
+    it’s being run on is connected to the Internet and has PowerShell verison 5 or higher installed.
 #>
 
 Install-Module -Name Pester -Force -SkipPublisherCheck
@@ -541,11 +546,6 @@ $CimSession = New-CimSession -ComputerName DC01
     In this demo you’ve learned how to find performance bottlenecks of Windows based systems
     with PowerShell. You’ll now be able to find specific performance counters for yourself, query those
     performance counters and validate that they’re within acceptable ranges.
-    The tests shown in this chapter were used to diagnose the performance problems described in the
-    scenario from the introduction to this demo. The current disk queue length was excessively high
-    on the Hyper-V hosts that the virtual desktop infrastructure (VDI) workstations were running on
-    in that scenario. The root cause of the high disk queue length was determined to be due to a newly
-    installed antivirus solution on the VDI workstations themselves.
 #>
 
 #endregion
