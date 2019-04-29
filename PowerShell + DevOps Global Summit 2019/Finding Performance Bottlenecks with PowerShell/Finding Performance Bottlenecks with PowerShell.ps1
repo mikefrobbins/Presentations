@@ -53,6 +53,7 @@ Get-ExecutionPolicy
 #>
 
 #Cntl + Shift + T and open a PowerShell Core terminal
+Set-Location -Path C:\
 $PSVersionTable.PSVersion
 Get-Command -Module Microsoft.PowerShell.Diagnostics
 
@@ -108,7 +109,17 @@ while($true){
 #>
 
 Help Get-Counter -ShowWindow
-    
+Get-Command -Name Get-Counter -Syntax
+
+#Types of objects produced by Get-Counter
+(Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space' | Get-Member).TypeName[0]
+((Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space').CounterSamples | Get-Member).TypeName[0]
+(Get-Counter -ListSet LogicalDisk | Get-Member).TypeName[0]
+
+#Get counter sets on the local computer
+
+Get-Counter -ListSet *
+
 <#
     As with any other commands in PowerShell that produce object-based output, a list of the properties
     for Get-Counter can be determined by piping it to Get-Member. It’s a good idea to start here no matter
@@ -117,6 +128,7 @@ Help Get-Counter -ShowWindow
 #>
 
 Get-Counter -ListSet * | Get-Member -MemberType Properties
+(Get-Counter -ListSet * | Get-Member -MemberType Properties).Count
 
 <#
     If you select all of the properties for the first result, you’ll get an idea of what type
@@ -134,6 +146,11 @@ Get-Counter -ListSet * | Select-Object -First 1 -Property *
 
 Clear-Host
 (Get-Counter -ListSet *).CounterSetName
+
+#I recommend sorting the results
+
+Clear-Host
+(Get-Counter -ListSet *).CounterSetName | Sort-Object
 
 <#
     The results can be limited by filtering left if you have an idea of the specific set
@@ -160,8 +177,7 @@ Clear-Host
 
 Clear-Host
 (Get-Counter -ListSet PhysicalDisk).Paths
-
-#Notice that the Paths and Counters properties return the same thing
+(Get-Counter -ListSet PhysicalDisk).Counter
 
 Clear-Host
 Get-Counter -ListSet PhysicalDisk
@@ -171,6 +187,13 @@ Compare-Object -ReferenceObject (Get-Counter -ListSet PhysicalDisk).Counter -Dif
 
 #Counter is an alias property of Paths
 Get-Counter -ListSet PhysicalDisk | Get-Member -MemberType Properties
+
+#More trickery
+(Get-Counter -ListSet PhysicalDisk | Where-Object Counter -like '*Queue*').Counter
+(Get-Counter -ListSet PhysicalDisk | Where-Object Paths -like '*Queue*').Counter
+(Get-Counter -ListSet PhysicalDisk).Count
+(Get-Counter -ListSet PhysicalDisk).Counter | Where-Object {$_ -like '*Queue*'}
+(Get-Counter -ListSet PhysicalDisk).Counter.Count
 
 #endregion
 
@@ -189,12 +212,14 @@ Get-Counter -ListSet PhysicalDisk | Get-Member -MemberType Properties
     • '\Paging File(*)\% Usage'
 #>
 
-#Source: https://blogs.technet.microsoft.com/bulentozkir/2014/02/14/top-10-most-important-performance-counters-for-windows-and-their-recommended-values/
+#Source: Top 10 most important performance counters for Windows and their recommended values
+#https://blogs.technet.microsoft.com/bulentozkir/2014/02/14/top-10-most-important-performance-counters-for-windows-and-their-recommended-values/
 
 #endregion
 
 #region Querying Performance Counters
 
+#Get-Counter by itself returns a default set of results for the local computer
 Get-Counter
 
 <#
@@ -232,7 +257,79 @@ Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time' | Get-Member -MemberType Pro
 <#
     Clearly, CounterSamples is the easier of the two when choosing between the properties that return
     the actual results of a performance counter because each instance is returned as a separate result.
+#>
 
+#Query all instances of one performance counter
+Get-Counter -Counter '\LogicalDisk(*)\% Free Space'
+
+#Paths with Instances
+(Get-Counter -ListSet LogicalDisk).PathsWithInstances
+(Get-Counter -ListSet LogicalDisk).PathsWithInstances | Where-Object {$_ -like '*% Free Space*'}
+((Get-Counter -ListSet LogicalDisk).PathsWithInstances | Where-Object {$_ -like '*% Free Space*'}) -replace '^.*\(|\).*$'
+Get-Counter -Counter '\LogicalDisk(C:)\% Free Space', '\LogicalDisk(D:)\% Free Space'
+Get-Counter -Counter '\LogicalDisk(*)\% Free Space' | Where-Object CounterSamples -NotLike '*_Total*'
+(Get-Counter -Counter '\LogicalDisk(*)\% Free Space').CounterSamples
+(Get-Counter -Counter '\LogicalDisk(*)\% Free Space').CounterSamples | Where-Object InstanceName -NotLike '_Total'
+
+#Query all of the logical disk performance counters
+Get-Counter -ListSet LogicalDisk
+(Get-Counter -ListSet LogicalDisk).Counter | Get-Counter
+Get-Counter -ListSet LogicalDisk | Get-Counter
+
+#Store the counter(s) in a variable
+$LogicalDisk = '\LogicalDisk(*)\% Free Space'
+$LogicalDisk | Get-Counter -MaxSamples 5
+
+#Store the counters in a variable and then query them
+$LogicalDisk = (Get-Counter -ListSet LogicalDisk).Counter
+Get-Counter -Counter $LogicalDisk
+
+#Query all of them three times, every two seconds
+Get-Counter -ListSet LogicalDisk | Get-Counter -SampleInterval 2 -MaxSamples 3
+
+#Query all of them continuously
+Get-Counter -ListSet LogicalDisk | Get-Counter -Continuous
+
+#Trying to use both the Continuous and MaxSamples parameters results in an error
+Get-Counter -ListSet LogicalDisk | Get-Counter -Continuous -MaxSamples 10
+
+#Why aren't those parameters in different parameter sets if they're mutually exclusive?
+Get-Command -Name Get-Counter -Syntax
+
+#The default and minimum value for SampleInterval is 1. The default and minimum value for MaxSamples is also 1.
+Get-Counter -ListSet LogicalDisk | Get-Counter -SampleInterval 0 -MaxSamples 10
+Get-Counter -ListSet LogicalDisk | Get-Counter -SampleInterval 1 -MaxSamples 10 -OutVariable Results
+$Results
+
+#Query Performance Counter Information on a remote system
+(Get-Counter -ComputerName DC01 -ListSet 'tcpv4').Counter | Get-Counter
+
+#Query Performance Counters as a job
+Start-Job {Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space' -MaxSamples 10}
+Get-Job
+Get-Job | Receive-Job -Keep
+Get-Job | Receive-Job -Keep | Get-Member
+(Get-Job | Receive-Job -Keep | Get-Member).TypeName[0]
+Get-Job | Receive-Job -Keep | Export-Counter -Path $Path\job-results.blg -Force
+
+#Different ways to query a remote system
+Get-Counter -ComputerName DC01 -Counter '\LogicalDisk(*)\% Free Space'
+Get-Counter -Counter '\\DC01\LogicalDisk(*)\% Free Space'
+
+Get-Command -Name Get-Counter -Syntax
+
+#Determine free disk space percentage with performance counters
+Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space' -ComputerName DC01
+$DiskSpace = Get-Counter -Counter '\LogicalDisk(*)\% Free Space' -ComputerName DC01
+$DiskSpace
+$DiskSpace.CounterSamples | Where-Object CookedValue -lt 15
+$DiskSpace.CounterSamples | Where-Object CookedValue -lt 75
+
+#Find the top processes with performance counters
+$Process = Get-Counter -Counter '\Process(*)\% Processor Time' -ErrorAction SilentlyContinue
+$Process.CounterSamples | Sort-Object -Property CookedValue -Descending | Select-Object -First 6
+
+<#
     One of the problems with the results of the CounterSamples property is the computer name and the
     performance counter being queried are returned jumbled together.
 
@@ -372,8 +469,8 @@ Describe 'Current Disk Queue Length' {
     
     This helper function, ConvertTo-MrHashTable, is also included in the presentation folder.
     
-    As many computers do, the computer used in this demo has multiple hard drives. We’ll need to
-    iterate through each one of them individually with our infrastructure test. While we could use a
+    As many computers do, the computer used in this demo has multiple hard drives. I’ll need to
+    iterate through each one of them individually with my infrastructure test. While I could use a
     foreach loop to prevent writing the same redundant code for each one of them over and over again,
     Pester has a TestCases parameter which is specifically designed for this exact scenario.
 #>
@@ -415,6 +512,8 @@ Describe 'Physical Disk Current Disk Queue Length' {
     not less than sixty percent is simple because the results are returned as a percentage by default.
 #>
 
+$Counters = Get-MrTop10Counter
+
 Describe "Physical Disk % Idle Time for $Computer" {
     $Counter = '% Idle Time'
     $Cases = $Counters.Where({
@@ -437,6 +536,9 @@ Describe "Physical Disk % Idle Time for $Computer" {
     instead of milliseconds and it’s not uncommon to see the results returned in scientific notation
     instead of a numeric datatype that can be used for normal calculations.
 #>
+
+.00000009 * 1000
+.00000009 * 1000 -as [decimal]
 
 Describe "Physical Disk Avg. Disk sec/Read for $Computer" {
     $Counter = 'Avg. Disk sec/Read'
@@ -550,94 +652,7 @@ $CimSession = New-CimSession -ComputerName DC01
 
 #endregion
 
-#region Get-Counter
-
-#Get counter sets on the local computer
-Get-Counter -ListSet * -OutVariable ListSet
-($ListSet | Sort-Object -Property CounterSetName). CounterSetName
-
-#Use the counter Path property to find formatted path names for performance counters
-Get-Counter -ListSet Battery*
-Get-Counter -ListSet 'Battery Status'
-(Get-Counter -ListSet Battery* | Get-Member -MemberType Properties).Count
-
-#Counter is an alias property of Paths
-Get-Counter -ListSet Battery* | Get-Member -MemberType Properties
-
-#List all of the Battery Status performance counters
-(Get-Counter -ListSet 'Battery Status').Counter
-(Get-Counter -ListSet 'Battery Status').Paths
-
-#More trickery
-(Get-Counter -ListSet 'Battery Status' | Where-Object Counter -like '*Capacity*').Counter
-(Get-Counter -ListSet 'Battery Status').Count
-(Get-Counter -ListSet 'Battery Status').Counter | Where-Object {$_ -like '*Capacity*'}
-(Get-Counter -ListSet 'Battery Status').Counter.Count
-
-#Query one of them
-Get-Counter -Counter '\Battery Status(*)\Remaining Capacity'
-
-#Query all of them
-(Get-Counter -ListSet 'Battery Status').Counter | Get-Counter
-Get-Counter -ListSet 'Battery Status' | Get-Counter
-
-#Store the counter(s) in a variable
-$BatteryCapacity = '\Battery Status(*)\Remaining Capacity'
-$BatteryCapacity | Get-Counter -MaxSamples 5
-
-#Store the counters in a variable and then query them
-$BatteryCounters = (Get-Counter -List 'Battery Status').Counter
-Get-Counter -Counter $BatteryCounters
-
-#Query all of them three times, every two seconds
-Get-Counter -ListSet 'Battery Status' | Get-Counter -SampleInterval 2 -MaxSamples 3
-
-#Query all of them continuously
-Get-Counter -ListSet 'Battery Status' | Get-Counter -Continuous
-
-#Trying to use both the Continuous and MaxSamples parameters results in an error
-Get-Counter -ListSet 'Battery Status' | Get-Counter -Continuous -MaxSamples 10
-
-#Why aren't those parameters in different parameter sets?
-Get-Command -Name Get-Counter -Syntax
-
-#The default and minimum value for SampleInterval is 1. The default and minimum value for MaxSamples is also 1.
-Get-Counter -ListSet 'Battery Status' | Get-Counter -SampleInterval 0 -MaxSamples 10
-Get-Counter -ListSet 'Battery Status' | Get-Counter -SampleInterval 1 -MaxSamples 10 -OutVariable Results
-$Results
-
-#Paths with Instances
-Get-Counter -List PhysicalDisk
-(Get-Counter -List PhysicalDisk).PathsWithInstances
-
-#Query Performance Counter Information on a remote system
-(Get-Counter -ComputerName DC01 -ListSet 'tcpv4').Counter | Get-Counter
-
-#Query Performance Counters as a job
-Start-Job -{Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space' -MaxSamples 10}
-Get-Job
-Get-Job | Receive-Job -Keep
-Get-Job | Receive-Job -Keep | Get-Member
-Get-Job | Receive-Job -Keep | Export-Counter -Path $Path\job-results.blg -Force
-
-#Different ways to query a remote system
-Get-Counter -ComputerName DC01 -Counter '\LogicalDisk(*)\% Free Space'
-Get-Counter -Counter '\\DC01\LogicalDisk(*)\% Free Space'
-
-#Determine free disk space percentage with performance counters
-$DiskSpace = Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space' -ComputerName DC01
-$DiskSpace
-$DiskSpace.CounterSamples | Where-Object CookedValue -lt 15
-$DiskSpace.CounterSamples | Where-Object CookedValue -lt 95
-
-#Find the top processes with performance counters
-$Process = Get-Counter -Counter '\Process(*)\% Processor Time'
-$Process.CounterSamples | Sort-Object -Property CookedValue -Descending | Select-Object -First 6
-
-#Types of objects produced by Get-Counter
-(Get-Counter | Get-Member).TypeName[0]
-((Get-Counter).CounterSamples | Get-Member).TypeName[0]
-(Get-Counter -ListSet Battery* | Get-Member).TypeName[0]
+#Bonus Content
 
 #Export-Counter
 #binary performance log
