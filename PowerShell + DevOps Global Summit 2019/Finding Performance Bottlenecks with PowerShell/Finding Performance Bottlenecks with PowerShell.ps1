@@ -244,6 +244,8 @@ Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time' | Get-Member -MemberType Pro
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples
 (Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples.Count
 ((Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples | Get-Member).TypeName[0]
+(Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples | Get-Member
+(Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples | Select-Object -Property * -First 1
 
 <#
     Then there’s the Readings property which returns all instances of a particular
@@ -310,7 +312,6 @@ Get-Job
 Get-Job | Receive-Job -Keep
 Get-Job | Receive-Job -Keep | Get-Member
 (Get-Job | Receive-Job -Keep | Get-Member).TypeName[0]
-Get-Job | Receive-Job -Keep | Export-Counter -Path $Path\job-results.blg -Force
 
 #Different ways to query a remote system
 Get-Counter -ComputerName DC01 -Counter '\LogicalDisk(*)\% Free Space'
@@ -513,6 +514,7 @@ Describe 'Physical Disk Current Disk Queue Length' {
 #>
 
 $Counters = Get-MrTop10Counter
+$Params = @{}
 
 Describe "Physical Disk % Idle Time for $Computer" {
     $Counter = '% Idle Time'
@@ -598,6 +600,12 @@ Describe "Memory Available Bytes for $Computer" {
     network cards description.
 #>
 
+<#
+#Run on host, not VM
+Get-NetAdapter
+Get-Counter -Counter '\Network Interface(*)\Bytes Total/sec'
+#>
+
 Describe "Network Interface Bytes Total/sec for $Computer" {
     $Counter = 'Bytes Total/sec'
     $Cases = $Counters.Where({
@@ -652,34 +660,39 @@ $CimSession = New-CimSession -ComputerName DC01
 
 #endregion
 
-#Bonus Content
 
-#Export-Counter
-#binary performance log
+#region Bonus Content
+
+#Export-Counter and Import-Counter
+
+#blg = binary performance log
 
 #Exported files must contain at least two data samples
-Get-Counter -Counter "\Processor(*)\% Processor Time" | Export-Counter -Path $Path\Counters.blg -Force
+Get-Counter -Counter '\Processor(*)\% Processor Time' | Export-Counter -Path $Path\Counters.blg -Force
+
+#Verify the file was created and does exist
+Get-ChildItem -Path $Path\Counters.blg
+
+#This command will generate an error
 Import-Counter -Path $Path\Counters.blg
 
 #Export Counter Samples and reimport them
-Get-Counter -Counter "\Processor(*)\% Processor Time" -MaxSamples 2 | Export-Counter -Path $Path\Counters.blg -Force
+Get-Counter -Counter '\Processor(*)\% Processor Time' -MaxSamples 2 | Export-Counter -Path $Path\Counters.blg -Force
 Import-Counter -Path $Path\Counters.blg
 
 #Convert the format of an existing exported performance log
-Get-Counter -Counter "\Processor(*)\% Processor Time" -MaxSamples 10 | Export-Counter -Path $Path\Counters.blg -Force
+Get-Counter -Counter '\Processor(*)\% Processor Time' -MaxSamples 10 | Export-Counter -Path $Path\Counters.blg -Force
 Import-Counter -Path $Path\Counters.blg | Export-Counter -Path $Path\Counters.csv -Force -FileFormat csv
-Import-Counter -Path $Path\Counters.blg | Export-Counter -Path $Path\Counters.tsv -Force -FileFormat tsv
+Import-Counter -Path $Path\Counters.csv | Export-Counter -Path $Path\Counters.tsv -Force -FileFormat tsv
 Import-Counter -Path $Path\Counters.blg
+Get-Content -Path $Path\Counters.blg
 Import-Counter -Path $Path\Counters.csv
+Import-Csv -Path $Path\Counters.csv
 Import-Counter -Path $Path\Counters.tsv
+Import-Csv -Path $Path\Counters.tsv -Delimiter "`t"
 Import-Counter -Path $Path\Counters.blg, $Path\Counters.csv, $Path\Counters.tsv
-
-#
-$Counter = '\\DC01\Process(Idle)\% Processor Time'
-$Results = Get-Counter -Counter $Counter
-$Results.CounterSamples | Select-Object -Property *
-
-Get-Counter -Counter '\Processor(*)\% Processor Time'
+"$Path\Counters.blg", "$Path\Counters.csv", "$Path\Counters.tsv" | Import-Counter
+"$Path\Counters.blg", "$Path\Counters.csv", "$Path\Counters.tsv" | ForEach-Object {Import-Counter -Path $_}
 
 
 $Counters = '\PhysicalDisk(*)\% Idle Time',
@@ -691,23 +704,6 @@ $Counters = '\PhysicalDisk(*)\% Idle Time',
 '\Network Interface(*)\Bytes Total/sec',
 '\Network Interface(*)\Output Queue Length',
 '\Paging File(*)\% Usage'
-
-Get-Counter -Counter $Counters -Continuous | Export-Counter -Path $Path\Counters.blg -MaxSize 1MB -Force
-Import-Counter -Path Threads.csv | Export-Counter -Path ThreadTest.blg -Circular -MaxSize 1MB
-
-
-
-$Counters = '\PhysicalDisk(*)\% Idle Time',
-'\PhysicalDisk(*)\Avg. Disk sec/Read',
-'\PhysicalDisk(*)\Avg. Disk sec/Write',
-'\PhysicalDisk(*)\Current Disk Queue Length',
-'\Memory\Available Bytes',
-'\Memory\Pages/sec',
-'\Network Interface(*)\Bytes Total/sec',
-'\Network Interface(*)\Output Queue Length',
-'\Paging File(*)\% Usage'
-
-Get-Counter -Counter $Counters -SampleInterval 1 -MaxSamples 3
 
 Get-Counter -Counter $Counters -SampleInterval 1 -MaxSamples 12 | Export-Counter -Path C:\Demo\Results.blg -Force
 
@@ -720,9 +716,31 @@ Start-Process -FilePath C:\Demo\Results.blg
 Import-Counter -Path C:\Demo\Results.blg -ListSet * | Select-Object -ExpandProperty PathsWithInstances -OutVariable Counters
 Get-Counter -Counter $Counters
 
-
-
 Import-Counter -Path C:\Demo\Results.blg -Summary
 
 Get-ChildItem -Path C:\Demo\*.blg | Import-Counter
 
+<#
+#Revisit running Get-Counter as a job
+Start-Job {Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space' -MaxSamples 10}
+Get-Job
+Get-Job | Receive-Job -Keep
+Get-Job | Receive-Job -Keep | Get-Member
+(Get-Job | Receive-Job -Keep | Get-Member).TypeName[0]
+#>
+Get-Job | Receive-Job -Keep | Export-Counter -Path $Path\job-results.blg -Force
+Export-Counter -InputObject (Get-Job | Receive-Job -Keep) -Path $Path\job-results.blg -Force
+
+help Export-Counter -Parameter InputObject
+
+(Get-Counter -ComputerName DC01 -ListSet 'tcpv4').Counter | Get-Counter | Export-Counter -Path $Path\Counters-DC01.blg
+
+Invoke-Command -ComputerName DC01 {
+    (Get-Counter -ListSet 'tcpv4').Counter | Get-Counter 
+} | Export-Counter -Path $Path\Counters-DC01.blg
+
+Export-Counter -InputObject (
+    Invoke-Command -ComputerName DC01 {
+        (Get-Counter -ListSet 'tcpv4').Counter | Get-Counter 
+    }
+) -Path $Path\Counters-DC01.blg
