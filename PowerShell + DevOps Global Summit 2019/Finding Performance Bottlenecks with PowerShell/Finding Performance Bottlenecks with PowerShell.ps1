@@ -20,6 +20,7 @@ throw "You're not supposed to run the entire script"
 
 #Set error messages to yellow
 $host.PrivateData.ErrorForegroundColor = 'yellow'
+1/0
 
 #Set location
 $Path = 'C:\Demo'
@@ -80,6 +81,21 @@ while($true){
     infrastructure until there’s a problem.
 #>
 
+#Top 10 most important performance counters for Windows and their recommended values
+#https://blogs.technet.microsoft.com/bulentozkir/2014/02/14/top-10-most-important-performance-counters-for-windows-and-their-recommended-values/
+
+<#
+    • '\PhysicalDisk(*)\% Idle Time'
+    • '\PhysicalDisk(*)\Avg. Disk sec/Read'
+    • '\PhysicalDisk(*)\Avg. Disk sec/Write'
+    • '\PhysicalDisk(*)\Current Disk Queue Length'
+    • '\Memory\Available Bytes'
+    • '\Memory\Pages/sec'
+    • '\Network Interface(*)\Bytes Total/sec'
+    • '\Network Interface(*)\Output Queue Length'
+    • '\Hyper-V Hypervisor Logical Processor(*)\% Total Run Time'
+    • '\Paging File(*)\% Usage'
+#>
 
 #endregion
 
@@ -138,6 +154,10 @@ Get-Counter -ListSet * | Get-Member -MemberType Properties
 
 Get-Counter -ListSet * | Select-Object -First 1 -Property *
 
+$profile | Format-List -Property *
+$profile | Select-Object -Property *
+$profile | Format-List -Property * -Force
+
 <#
     CounterSetName is one of the properties returned when using the ListSet parameter of Get-Counter. Its
     property returns the category for a group of performance counters. A list of all the CounterSetNames
@@ -188,32 +208,16 @@ Compare-Object -ReferenceObject (Get-Counter -ListSet PhysicalDisk).Counter -Dif
 #Counter is an alias property of Paths
 Get-Counter -ListSet PhysicalDisk | Get-Member -MemberType Properties
 
-#More trickery
+#Trying to filter down to specific counters or paths does not work like you think it should
 (Get-Counter -ListSet PhysicalDisk | Where-Object Counter -like '*Queue*').Counter
 (Get-Counter -ListSet PhysicalDisk | Where-Object Paths -like '*Queue*').Counter
+
+#That's because they're all returned as one item
 (Get-Counter -ListSet PhysicalDisk).Count
+
+#Select the Counter property first and then filter the data
 (Get-Counter -ListSet PhysicalDisk).Counter | Where-Object {$_ -like '*Queue*'}
 (Get-Counter -ListSet PhysicalDisk).Counter.Count
-
-#endregion
-
-#region The Top 10 Performance Counters
-
-<#
-    • '\PhysicalDisk(*)\% Idle Time'
-    • '\PhysicalDisk(*)\Avg. Disk sec/Read'
-    • '\PhysicalDisk(*)\Avg. Disk sec/Write'
-    • '\PhysicalDisk(*)\Current Disk Queue Length'
-    • '\Memory\Available Bytes'
-    • '\Memory\Pages/sec'
-    • '\Network Interface(*)\Bytes Total/sec'
-    • '\Network Interface(*)\Output Queue Length'
-    • '\Hyper-V Hypervisor Logical Processor(*)\% Total Run Time'
-    • '\Paging File(*)\% Usage'
-#>
-
-#Source: Top 10 most important performance counters for Windows and their recommended values
-#https://blogs.technet.microsoft.com/bulentozkir/2014/02/14/top-10-most-important-performance-counters-for-windows-and-their-recommended-values/
 
 #endregion
 
@@ -275,6 +279,7 @@ Get-Counter -Counter '\LogicalDisk(*)\% Free Space' | Where-Object CounterSample
 
 #Query all of the logical disk performance counters
 Get-Counter -ListSet LogicalDisk
+(Get-Counter -ListSet LogicalDisk).Counter
 (Get-Counter -ListSet LogicalDisk).Counter | Get-Counter
 Get-Counter -ListSet LogicalDisk | Get-Counter
 
@@ -438,7 +443,7 @@ Format-Table -AutoSize
     it’s being run on is connected to the Internet and has PowerShell verison 5 or higher installed.
 #>
 
-Install-Module -Name Pester -Force -SkipPublisherCheck
+#Install-Module -Name Pester -Force -SkipPublisherCheck
 
 #More information about Pester can be found on its Wiki: https://github.com/pester/Pester/wiki
 
@@ -476,7 +481,10 @@ Describe 'Current Disk Queue Length' {
     Pester has a TestCases parameter which is specifically designed for this exact scenario.
 #>
 
+$Params = @{}
 $Counters = Get-MrTop10Counter
+$Counter
+
 Describe 'Physical Disk Current Disk Queue Length' {
     $Counter = 'Current Disk Queue Length'
     $Cases = $Counters.Where({
@@ -512,9 +520,6 @@ Describe 'Physical Disk Current Disk Queue Length' {
     Validating that the percent idle time for a physical disk is
     not less than sixty percent is simple because the results are returned as a percentage by default.
 #>
-
-$Counters = Get-MrTop10Counter
-$Params = @{}
 
 Describe "Physical Disk % Idle Time for $Computer" {
     $Counter = '% Idle Time'
@@ -650,20 +655,7 @@ $CimSession = New-CimSession -ComputerName DC01
 
 #endregion
 
-#region Summary
-
-<#
-    In this demo you’ve learned how to find performance bottlenecks of Windows based systems
-    with PowerShell. You’ll now be able to find specific performance counters for yourself, query those
-    performance counters and validate that they’re within acceptable ranges.
-#>
-
-#endregion
-
-
-#region Bonus Content
-
-#Export-Counter and Import-Counter
+#region Bonus Content - Export-Counter and Import-Counter
 
 #blg = binary performance log
 
@@ -744,3 +736,13 @@ Export-Counter -InputObject (
         (Get-Counter -ListSet 'tcpv4').Counter | Get-Counter 
     }
 ) -Path $Path\Counters-DC01.blg
+
+#region Summary
+
+<#
+    In this presentation, you’ve learned how to find performance bottlenecks of Windows based systems
+    with PowerShell. You’ll now be able to find specific performance counters for yourself, query those
+    performance counters and validate that they’re within acceptable ranges.
+#>
+
+#endregion
