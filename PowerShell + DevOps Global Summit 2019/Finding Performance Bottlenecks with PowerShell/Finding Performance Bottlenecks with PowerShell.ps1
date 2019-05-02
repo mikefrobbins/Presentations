@@ -124,8 +124,8 @@ while($true){
     itself is easy enough. A good place to start would be to read the help for the Get-Counter cmdlet.
 #>
 
-Help Get-Counter -ShowWindow
-Get-Command -Name Get-Counter -Syntax
+#Help Get-Counter -ShowWindow
+#Get-Command -Name Get-Counter -Syntax
 
 #Types of objects produced by Get-Counter
 (Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space' | Get-Member).TypeName[0]
@@ -133,7 +133,6 @@ Get-Command -Name Get-Counter -Syntax
 (Get-Counter -ListSet LogicalDisk | Get-Member).TypeName[0]
 
 #Get counter sets on the local computer
-
 Get-Counter -ListSet *
 
 <#
@@ -168,7 +167,6 @@ Clear-Host
 (Get-Counter -ListSet *).CounterSetName
 
 #I recommend sorting the results
-
 Clear-Host
 (Get-Counter -ListSet *).CounterSetName | Sort-Object
 
@@ -188,13 +186,15 @@ Clear-Host
 <#
     Once you’ve narrowed your choice down to a specific category with CounterSetName,
     the performance counter names themselves can be determine by returning the Counter property.
+
+    Each counter path has the following format: '[\\<ComputerName>]\<CounterSet>(<Instance>)\<CounterName>'
+    The <ComputerName> element is optional. If you omit it, this cmdlet uses the value of the ComputerName parameter.
 #>
 
 Clear-Host
 (Get-Counter -ListSet PhysicalDisk).Counter
 
 #The Paths property returns the same thing as the Counter property
-
 Clear-Host
 (Get-Counter -ListSet PhysicalDisk).Paths
 (Get-Counter -ListSet PhysicalDisk).Counter
@@ -214,10 +214,11 @@ Get-Counter -ListSet PhysicalDisk | Get-Member -MemberType Properties
 
 #That's because they're all returned as one item
 (Get-Counter -ListSet PhysicalDisk).Count
+(Get-Counter -ListSet PhysicalDisk).Counter.Count
 
 #Select the Counter property first and then filter the data
 (Get-Counter -ListSet PhysicalDisk).Counter | Where-Object {$_ -like '*Queue*'}
-(Get-Counter -ListSet PhysicalDisk).Counter.Count
+((Get-Counter -ListSet PhysicalDisk).Counter | Where-Object {$_ -like '*Queue*'}).Count
 
 #endregion
 
@@ -297,19 +298,16 @@ Get-Counter -ListSet LogicalDisk | Get-Counter -SampleInterval 2 -MaxSamples 3
 #Query all of them continuously
 Get-Counter -ListSet LogicalDisk | Get-Counter -Continuous
 
+#Who thinks the Continuous and MaxSamples parameter can be used together?
+Get-Command -Name Get-Counter -Syntax
+
 #Trying to use both the Continuous and MaxSamples parameters results in an error
 Get-Counter -ListSet LogicalDisk | Get-Counter -Continuous -MaxSamples 10
-
-#Why aren't those parameters in different parameter sets if they're mutually exclusive?
-Get-Command -Name Get-Counter -Syntax
 
 #The default and minimum value for SampleInterval is 1. The default and minimum value for MaxSamples is also 1.
 Get-Counter -ListSet LogicalDisk | Get-Counter -SampleInterval 0 -MaxSamples 10
 Get-Counter -ListSet LogicalDisk | Get-Counter -SampleInterval 1 -MaxSamples 10 -OutVariable Results
 $Results
-
-#Query Performance Counter Information on a remote system
-(Get-Counter -ComputerName DC01 -ListSet 'tcpv4').Counter | Get-Counter
 
 #Query Performance Counters as a job
 Start-Job {Get-Counter -Counter '\LogicalDisk(_Total)\% Free Space' -MaxSamples 10}
@@ -318,10 +316,15 @@ Get-Job | Receive-Job -Keep
 Get-Job | Receive-Job -Keep | Get-Member
 (Get-Job | Receive-Job -Keep | Get-Member).TypeName[0]
 
+#Query Performance Counter Information on a remote system
+(Get-Counter -ComputerName DC01 -ListSet 'tcpv4').Counter | Get-Counter
+(Get-Counter -ComputerName DC01 -ListSet 'tcpv4').Counter | Get-Counter -ComputerName DC01
+
 #Different ways to query a remote system
 Get-Counter -ComputerName DC01 -Counter '\LogicalDisk(*)\% Free Space'
 Get-Counter -Counter '\\DC01\LogicalDisk(*)\% Free Space'
 
+#More than one computer can be queried at the same time
 Get-Command -Name Get-Counter -Syntax
 
 #Determine free disk space percentage with performance counters
@@ -364,10 +367,6 @@ Format-Table -AutoSize
 Get-Counter
 Get-Counter -ComputerName DC01
 
-Invoke-Command -ComputerName DC01 {
-    Get-Counter
-}
-
 #My regular expression doesn't work properly because of the extra backslash after the computer name when querying remote computers
 
 (Get-Counter -ComputerName DC01 -Counter '\PhysicalDisk(*)\% Idle Time').CounterSamples |
@@ -380,6 +379,17 @@ $_.Path -replace "^\\\\$env:COMPUTERNAME\\|\(.*$"}},
 @{label='Value';expression={$_.CookedValue}},
 @{label='TimeStamp';expression={$_.TimeStamp}} |
 Format-Table -AutoSize
+
+Invoke-Command -ComputerName DC01 {
+    Get-Counter
+}
+
+#endregion
+
+#region Format-MrCounter
+
+Get-Counter
+Get-Counter | Format-MrCounter
 
 #endregion
 
@@ -452,7 +462,7 @@ Format-Table -AutoSize
 #region Validation Tests
 
 <#
-    We’ll start out by writing a simple validation test for the Current Disk Queue Length for the “C”
+    I’ll start out by writing a simple validation test for the Current Disk Queue Length for the “C”
     drive on your local computer.
 #>
 
@@ -474,16 +484,46 @@ Describe 'Current Disk Queue Length' {
     some point in the past and saved it in my PowerShell repository on GitHub.
     
     This helper function, ConvertTo-MrHashTable, is also included in the presentation folder.
+
+#>
+
+$Params = @{}
+$Counters = Get-MrTop10Counter
+$Counters
+
+$Counter = 'Current Disk Queue Length'
+
+$Counters.Where({
+    $_.Counter -eq $Counter -and $_.Instance -ne '_total'
+}) |
+Select-Object -Property Instance
+
+($Counters.Where({
+    $_.Counter -eq $Counter -and $_.Instance -ne '_total'
+}) |
+Select-Object -Property Instance |
+Get-Member).TypeName[0]
+
+$Counters.Where({
+    $_.Counter -eq $Counter -and $_.Instance -ne '_total'
+}) |
+Select-Object -Property Instance |
+ConvertTo-MrHashTable
+
+($Counters.Where({
+    $_.Counter -eq $Counter -and $_.Instance -ne '_total'
+}) |
+Select-Object -Property Instance |
+ConvertTo-MrHashTable |
+Get-Member).TypeName[0]
+
+<#
     
     As many computers do, the computer used in this demo has multiple hard drives. I’ll need to
     iterate through each one of them individually with my infrastructure test. While I could use a
     foreach loop to prevent writing the same redundant code for each one of them over and over again,
     Pester has a TestCases parameter which is specifically designed for this exact scenario.
 #>
-
-$Params = @{}
-$Counters = Get-MrTop10Counter
-$Counter
 
 Describe 'Physical Disk Current Disk Queue Length' {
     $Counter = 'Current Disk Queue Length'
@@ -520,6 +560,8 @@ Describe 'Physical Disk Current Disk Queue Length' {
     Validating that the percent idle time for a physical disk is
     not less than sixty percent is simple because the results are returned as a percentage by default.
 #>
+
+Get-Counter -Counter '\PhysicalDisk(*)\% Idle Time'
 
 Describe "Physical Disk % Idle Time for $Computer" {
     $Counter = '% Idle Time'
@@ -588,6 +630,8 @@ Describe "Physical Disk Avg. Disk sec/Write for $Computer" {
     this out on a remote system only complicates matters even further.
 #>
 
+Get-Counter -Counter '\Memory\Available Bytes'
+
 Describe "Memory Available Bytes for $Computer" {
     It 'Should Not Be Less than 10% free' {
         ($Counters.Where({$_.Counter -eq 'Available Bytes'}).Value / 1MB) /
@@ -610,6 +654,8 @@ Describe "Memory Available Bytes for $Computer" {
 Get-NetAdapter
 Get-Counter -Counter '\Network Interface(*)\Bytes Total/sec'
 #>
+
+Get-Counter -Counter '\Network Interface(*)\Bytes Total/sec'
 
 Describe "Network Interface Bytes Total/sec for $Computer" {
     $Counter = 'Bytes Total/sec'
