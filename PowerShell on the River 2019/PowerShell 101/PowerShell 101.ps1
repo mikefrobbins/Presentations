@@ -133,11 +133,13 @@ Get-Command | Get-Random | Get-Help
 help about_* 
 help about_Execution_Policies
 help service
+help Get-Service
 
 #Highlight a command and press Cntl + F1 to display its help
-#Mandatory parameters
-Get-EventLog
 Get-EventLog -LogName 'Windows PowerShell' -Newest 3
+
+#Shortcut for figuring out how to use commands
+gcm Get-Service -Syntax
 
 #endregion
 
@@ -176,6 +178,13 @@ $profile | Select-Object -Property *
 #Use full cmdlet and parameter names in any code that you're sharing
 Get-Alias -Definition Get-Command, Get-Member, help, ForEach-Object, Where-Object
 
+#Not Specifying a Verb in PowerShell is an Expensive Shortcut
+Service
+Trace-Command -Expression {Service} -Name CommandDiscovery -PSHost | Out-Null
+Trace-Command -Expression {Get-Service} -Name CommandDiscovery -PSHost | Out-Null
+
+#For more information, see: https://mikefrobbins.com/2017/09/27/not-specifying-a-verb-in-powershell-is-an-expensive-shortcut/
+
 Get-WindowsOptionalFeature -FeatureName TelnetClient -Online
 
 #What cmdlets have parameters that accept ServiceController objects?
@@ -183,8 +192,9 @@ Get-WindowsOptionalFeature -FeatureName TelnetClient -Online
 Get-Command -ParameterType ServiceController
 
 #Find out if Stop-Service accepts ServiceController objects via the pipeline
-help Stop-Service -Full 
+help Stop-Service -ShowWindow
 help Stop-Service -Parameter InputObject
+help Stop-Service -Parameter Name
 
 #ByValue (ServiceController). Notice the WhatIf parameter
 Get-Service -Name BITS, W32Time | Stop-Service -WhatIf
@@ -217,6 +227,14 @@ Get-Service w32time
 Get-Service w32time
 (Get-Service w32time).Start()
 Get-Service w32time
+
+Get-SqlAgentJob -ServerInstance SQL12
+
+Get-Command -Noun SqlAgentJob
+
+Get-SqlAgentJob -ServerInstance SQL12 | Get-Member -MemberType Method
+
+(Get-SqlAgentJob -ServerInstance SQL12 -Name Backup.Subplan_1).Start()
 
 #endregion
 
@@ -276,6 +294,28 @@ Measure-Command {
         Get-Service -Name Win*
     }
 }
+
+Invoke-Sqlcmd -ServerInstance SQL12 -Database AdventureWorks2012 -Query '
+select * from Person.Person' |
+Where-Object LastName -eq 'Browning' |
+Select-Object -Property BusinessEntityID, FirstName, MiddleName, LastName
+
+Invoke-Sqlcmd -ServerInstance SQL12 -Database AdventureWorks2012 -Query "
+select BusinessEntityID, FirstName, MiddleName, LastName from Person.Person where LastName = 'Browning'"
+
+Measure-Command {
+    Invoke-Sqlcmd -ServerInstance SQL12 -Database AdventureWorks2012 -Query '
+    select * from Person.Person' |
+    Where-Object LastName -eq 'Browning' |
+    Select-Object -Property BusinessEntityID, FirstName, MiddleName, LastName
+} -OutVariable Opt1
+
+Measure-Command {
+    Invoke-Sqlcmd -ServerInstance SQL12 -Database AdventureWorks2012 -Query "
+    select BusinessEntityID, FirstName, MiddleName, LastName from Person.Person where LastName = 'Browning'"
+} -OutVariable Opt2
+
+$Opt1.Milliseconds / $Opt2.Milliseconds -as [int]
 
 #endregion
 
@@ -364,6 +404,76 @@ Import-Module -Name SQLServer
 #What commands exist in the SQLServer module?
 Get-Command -Module SQLServer
 
+#Query the AdventureWorks2012 database on SQL12
+Invoke-Sqlcmd -ServerInstance sql12 -Database AdventureWorks2012 -Query '
+select Employee.LoginID,
+       Person.FirstName as givenname,
+       Person.LastName as surname,
+       Employee.JobTitle as title,
+       Address.AddressLine1 as streetaddress,
+       Address.City,
+       Address.PostalCode,
+       PersonPhone.PhoneNumber as officephone
+from HumanResources.Employee
+    join Person.Person
+    on Employee.BusinessEntityID = Person.BusinessEntityID
+    join Person.PersonPhone
+    on Person.BusinessEntityID = PersonPhone.BusinessEntityID
+    join Person.BusinessEntityAddress
+    on PersonPhone.BusinessEntityID = BusinessEntityAddress.BusinessEntityID
+    join Person.Address
+    on BusinessEntityAddress.AddressID = Address.AddressID' | 
+Select-Object -Property @{label='Name';expression={"$($_.givenname) $($_.surname)"}},
+                        @{label='SamAccountName';expression={$_.loginid.tolower() -replace '^.*\\'}},
+                        @{label='UserPrincipalName';expression={"$($_.loginid.tolower() -replace '^.*\\')@mikefrobbins.com"}},
+                        @{label='DisplayName';expression={"$($_.givenname) $($_.surname)"}},
+                        title,
+                        givenname,
+                        surname,
+                        officephone,
+                        streetaddress,
+                        postalcode,
+                        city |
+Format-Table -AutoSize
+
+#Return the number of users in the AdventureWorks OU in Active Directory
+(Get-ADUser -Filter * -SearchBase 'OU=AdventureWorks Users,OU=Users,OU=Test,DC=mikefrobbins,DC=com').count
+
+#Create 290 Active Directory users based on infomation in the  SQL AdventureWorks2012 database
+Measure-Command {Invoke-Sqlcmd -ServerInstance sql12 -Database AdventureWorks2012 -Query '
+select Employee.LoginID,
+       Person.FirstName as givenname,
+       Person.LastName as surname,
+       Employee.JobTitle as title,
+       Address.AddressLine1 as streetaddress,
+       Address.City,
+       Address.PostalCode,
+       PersonPhone.PhoneNumber as officephone
+from HumanResources.Employee
+    join Person.Person
+    on Employee.BusinessEntityID = Person.BusinessEntityID
+    join Person.PersonPhone
+    on Person.BusinessEntityID = PersonPhone.BusinessEntityID
+    join Person.BusinessEntityAddress
+    on PersonPhone.BusinessEntityID = BusinessEntityAddress.BusinessEntityID
+    join Person.Address
+    on BusinessEntityAddress.AddressID = Address.AddressID' | 
+Select-Object -Property @{label='Name';expression={"$($_.givenname) $($_.surname)"}},
+                        @{label='SamAccountName';expression={$_.loginid.tolower() -replace '^.*\\'}},
+                        @{label='UserPrincipalName';expression={"$($_.loginid.tolower() -replace '^.*\\')@mikefrobbins.com"}},
+                        @{label='DisplayName';expression={"$($_.givenname) $($_.surname)"}},
+                        title,
+                        givenname,
+                        surname,
+                        officephone,
+                        streetaddress,
+                        postalcode,
+                        city | 
+New-ADUser -Path 'OU=AdventureWorks Users,OU=Users,OU=Test,DC=mikefrobbins,DC=com'}
+
+#Return a list of users in the AdventureWorks OU in Active Directory
+(Get-ADUser -Filter * -SearchBase 'OU=AdventureWorks Users,OU=Users,OU=Test,DC=mikefrobbins,DC=com').Count
+
 #endregion
 
 #region PSKoans
@@ -375,5 +485,13 @@ Install-Module -Name PSKoans -Force
 Measure-Karma
 
 Measure-Karma -Meditate
+
+#endregion
+
+
+#region Bonus
+
+#Pipe to clip.exe
+(Get-Service -Name w32time).DisplayName | clip.exe
 
 #endregion
