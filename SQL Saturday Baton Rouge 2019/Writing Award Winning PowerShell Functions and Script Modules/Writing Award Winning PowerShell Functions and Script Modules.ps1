@@ -32,6 +32,9 @@ Set-Location -Path $Path
 #Import my MrToolkit module (https://github.com/mikefrobbins/PowerShell or Install-Module -Name MrToolkit)
 Import-Module U:\GitHub\PowerShell\MrToolkit\MrToolkit.psd1
 
+#Import my MrModuleBuildTools module (https://github.com/mikefrobbins/ModuleBuildTools)
+Import-Module U:\GitHub\ModuleBuildTools\MrModuleBuildTools\MrModuleBuildTools.psd1
+
 #Clear the screen
 Clear-Host
 
@@ -646,7 +649,7 @@ Sort-Object -Property Value
     also use the following. https://www.powershellgallery.com/packages/Pscx
 #>
 
-[accelerators]::get
+#[accelerators]::get
 
 #endregion
 
@@ -1084,7 +1087,7 @@ function Get-MrAutoStoppedService {
     your functions that's just like using the default built-in cmdlets.
 #>
 
-help Get-MrAutoStoppedService -Full
+help Get-MrAutoStoppedService -ShowWindow
 
 <#
     You don't have to memorize all of this. Use Cntl + J for Snipets in the PowerShell ISE.
@@ -1164,14 +1167,14 @@ if (-not(Test-Path -Path $Folder -PathType Container)) {
 New-PlasterManifest @manifestProperties
 
 #That creates an XML file that looks like the one in the following example.
-psEdit -filenames $Path\PlasterTemplate\PlasterManifest.xml
+psEdit $Path\PlasterTemplate\PlasterManifest.xml
 
 #Create a standard PSM1 file in the Plaster template folder that will be used for all newly created modules. 
 
 New-Item -Path "$Path\PlasterTemplate" -Name Module.psm1 |
 Set-Content -Encoding UTF8 -Value @'
-#Dot source all functions in all ps1 files located in the module folder
-Get-ChildItem -Path $PSScriptRoot\*.ps1 -Exclude *.tests.ps1, *profile.ps1 |
+#Dot source all functions in all ps1 files located in the module's public and private folders, excluding tests and profiles.
+Get-ChildItem -Path $PSScriptRoot\public\*.ps1, $PSScriptRoot\private\*.ps1 -Exclude *.tests.ps1, *profile.ps1 -ErrorAction SilentlyContinue |
 ForEach-Object {
     . $_.FullName
 }
@@ -1187,41 +1190,162 @@ psEdit $Path\PlasterTemplate\Module.psm1
 
 Set-Content -Path $Path\PlasterTemplate\PlasterManifest.xml -Value @'
 <?xml version="1.0" encoding="utf-8"?>
-<plasterManifest schemaVersion="1.1" templateType="Project"
-  xmlns="http://www.microsoft.com/schemas/PowerShell/Plaster/v1">
-  <metadata>
-    <name>ScriptModuleTemplate</name>
-    <id>ee4fdc83-1b9a-47ae-b4e6-336053283a86</id>
-    <version>1.0.0</version>
-    <title>ScriptModuleTemplate</title>
-    <description>Scaffolds the files required for a PowerShell script module</description>
-    <author>Mike F Robbins</author>
-    <tags>PowerShell, Module, ModuleManifest</tags>
-  </metadata>
-  <parameters>
-    <parameter name='Name' type='text' prompt='Name of the module' />
-    <parameter name='Description' type='text' prompt='Brief description of module (required for publishing to the PowerShell Gallery)' />
-    <parameter name='Version' type='text' default='0.1.0' prompt='Enter the version number of the module' />
-    <parameter name='Author' type='user-fullname' prompt="Module author's name" store='text' />
-    <parameter name='CompanyName' type='text' prompt='Name of your Company' default='mikefrobbins.com' />
-    <parameter name='PowerShellVersion' default='3.0' type='text' prompt='Minimum PowerShell version' />
-  </parameters>
-  <content>
-    <message>
-    Creating folder structure
-    </message>
-    <file source='' destination='${PLASTER_PARAM_Name}'/>
-    <message>
-      Deploying common files
-    </message>
-    <file source='module.psm1' destination='${PLASTER_PARAM_Name}\${PLASTER_PARAM_Name}.psm1'/>
-    <message>
-      Creating Module Manifest
-    </message>
-    <newModuleManifest destination='${PLASTER_PARAM_Name}\${PLASTER_PARAM_Name}.psd1' moduleVersion='$PLASTER_PARAM_Version' rootModule='${PLASTER_PARAM_Name}.psm1' author='$PLASTER_PARAM_Author' companyName='$PLASTER_PARAM_CompanyName' description='$PLASTER_PARAM_Description' powerShellVersion='$PLASTER_PARAM_PowerShellVersion' encoding='UTF8-NoBOM'/>
-  </content>
+<plasterManifest schemaVersion="1.1" templateType="Project" xmlns="http://www.microsoft.com/schemas/PowerShell/Plaster/v1">
+   <metadata>
+      <name>ScriptModuleTemplate</name>
+      <id>ee4fdc83-1b9a-47ae-b4e6-336053283a86</id>
+      <version>1.0.0</version>
+      <title>Script Module Template</title>
+      <description>Scaffolds the files required for a PowerShell script module</description>
+      <author>Mike F. Robbins</author>
+      <tags>PowerShell, Module, ScriptModule</tags>
+   </metadata>
+   <parameters>
+      <parameter name="Name" type="text" prompt="Name of the module"/>
+      <parameter name="Description" type="text" prompt="Brief description of module (required for publishing to the PowerShell Gallery)"/>
+      <parameter name="Version" type="text" default="1.0.0" prompt="Enter the version number of the module"/>
+      <parameter name="Author" type="user-fullname" store="text" prompt="Module author's name"/>
+      <parameter name="CompanyName" type="text" default="mikefrobbins.com" prompt="Name of your Company"/>
+      <parameter name="Folders" type="multichoice" default="0,1" prompt="Select folders to create">
+         <choice label="&amp;Public" value="public" help="Adds a public folder to module root"/>
+         <choice label="P&amp;rivate" value="private" help="Adds a private folder to module root"/>
+      </parameter>
+      <parameter name="Git" type="choice" default="0" prompt="Create Git top level folder?">
+         <choice label="&amp;Yes" value="Yes" help="Create a top level folder for Git with module folder nested in it."/>
+         <choice label="&amp;No" value="No" help="No Git top level folder. Module folder will be the root."/>
+      </parameter>
+      <parameter condition="$PLASTER_PARAM_Git -eq 'Yes'" name="GitRepoName" type="text" prompt="Git repo name for this module? " default="${PLASTER_PARAM_Name}"/>
+      <parameter condition="$PLASTER_PARAM_Git -eq 'Yes'" name="Options" type="multichoice" prompt="Select one or more of the following options:" default="0,1,2,3" store="text">
+         <choice label="Add &amp;MIT License" help="Adds MIT LICENSE file" value="License"/>
+         <choice label="Add &amp;Readme.md file" help="Adds Readme.md file" value="Readme"/>
+         <choice label="Add &amp;Git .gitignore file" help="Adds a .gitignore file." value="GitIgnore"/>
+         <choice label="Add G&amp;it .gitattributes file" help="Adds a .gitattributes file." value="GitAttributes"/>
+         <choice label="&amp;None" help="No options specified." value="None"/>
+      </parameter>
+   </parameters>
+   <content>
+      <message>Creating folder structure</message>
+      <file condition="$PLASTER_PARAM_Folders -contains 'public' -and $PLASTER_PARAM_Git -eq 'Yes'" source="" destination="${PLASTER_PARAM_GitRepoName}\${PLASTER_PARAM_Name}\public"/>
+      <file condition="$PLASTER_PARAM_Folders -contains 'private' -and $PLASTER_PARAM_Git -eq 'Yes'" source="" destination="${PLASTER_PARAM_GitRepoName}\${PLASTER_PARAM_Name}\private"/>
+      <file condition="$PLASTER_PARAM_Folders -contains 'public' -and $PLASTER_PARAM_Git -eq 'No'" source="" destination="${PLASTER_PARAM_Name}\public"/>
+      <file condition="$PLASTER_PARAM_Folders -contains 'private' -and $PLASTER_PARAM_Git -eq 'No'" source="" destination="${PLASTER_PARAM_Name}\private"/>
+      <message>Deploying common files</message>
+      <file condition="$PLASTER_PARAM_Git -eq 'Yes'" source="module.psm1" destination="${PLASTER_PARAM_GitRepoName}\${PLASTER_PARAM_Name}\${PLASTER_PARAM_Name}.psm1"/>
+      <file condition="$PLASTER_PARAM_Git -eq 'No'" source="module.psm1" destination="${PLASTER_PARAM_Name}\${PLASTER_PARAM_Name}.psm1"/>
+      <message>Creating Module Manifest</message>
+      <newModuleManifest condition="$PLASTER_PARAM_Git -eq 'Yes'" destination="${PLASTER_PARAM_GitRepoName}\${PLASTER_PARAM_Name}\${PLASTER_PARAM_Name}.psd1" moduleVersion="$PLASTER_PARAM_Version" rootModule="${PLASTER_PARAM_Name}.psm1" author="$PLASTER_PARAM_Author" companyName="$PLASTER_PARAM_CompanyName" description="$PLASTER_PARAM_Description" encoding="UTF8-NoBOM"/>
+      <newModuleManifest condition="$PLASTER_PARAM_Git -eq 'No'" destination="${PLASTER_PARAM_Name}\${PLASTER_PARAM_Name}.psd1" moduleVersion="$PLASTER_PARAM_Version" rootModule="${PLASTER_PARAM_Name}.psm1" author="$PLASTER_PARAM_Author" companyName="$PLASTER_PARAM_CompanyName" description="$PLASTER_PARAM_Description" encoding="UTF8-NoBOM"/>
+      <message condition="$PLASTER_PARAM_Options -notcontains 'None'">Deploying optional components</message>
+      <templateFile condition="$PLASTER_PARAM_Options -contains 'License' -and $PLASTER_PARAM_Options -notcontains 'None'" source="LICENSE" destination="${PLASTER_PARAM_GitRepoName}\LICENSE"/>
+      <templateFile condition="$PLASTER_PARAM_Options -contains 'Readme' -and $PLASTER_PARAM_Options -notcontains 'None'" source="xReadme.md" destination="${PLASTER_PARAM_GitRepoName}\Readme.md"/>
+      <file condition="$PLASTER_PARAM_Options -contains 'GitIgnore' -and $PLASTER_PARAM_Options -notcontains 'None'" source=".gitignore" destination="${PLASTER_PARAM_GitRepoName}\.gitignore"/>
+      <file condition="$PLASTER_PARAM_Options -contains 'GitAttributes' -and $PLASTER_PARAM_Options -notcontains 'None'" source=".gitattributes" destination="${PLASTER_PARAM_GitRepoName}\.gitattributes"/>
+   </content>
 </plasterManifest>
 '@
+
+Set-Content -Path $Path\PlasterTemplate\xREADME.md -Value @'
+# <%=$PLASTER_PARAM_GitRepoName%>
+
+<%=$PLASTER_PARAM_Description%>
+
+'@
+
+Set-Content -Path $Path\PlasterTemplate\LICENSE -Value @'
+The MIT License (MIT)
+
+Copyright (c) <%=(Get-Date).Year%> <%=$PLASTER_PARAM_Author %>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+'@
+
+Set-Content -Path $Path\PlasterTemplate\.gitattributes -Value @'
+# Auto detect text files and perform LF normalization
+* text=auto
+
+# Custom for Visual Studio
+*.cs     diff=csharp
+
+# Standard to msysgit
+*.doc	 diff=astextplain
+*.DOC	 diff=astextplain
+*.docx diff=astextplain
+*.DOCX diff=astextplain
+*.dot  diff=astextplain
+*.DOT  diff=astextplain
+*.pdf  diff=astextplain
+*.PDF	 diff=astextplain
+*.rtf	 diff=astextplain
+*.RTF	 diff=astextplain
+
+'@
+
+Set-Content -Path $Path\PlasterTemplate\.gitignore -Value @'
+# Windows image file caches
+Thumbs.db
+ehthumbs.db
+
+# Folder config file
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Windows Installer files
+*.cab
+*.msi
+*.msm
+*.msp
+
+# Windows shortcuts
+*.lnk
+
+# =========================
+# Operating System Files
+# =========================
+
+# OSX
+# =========================
+
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Thumbnails
+._*
+
+# Files that might appear on external disk
+.Spotlight-V100
+.Trashes
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+.vscode/settings.json
+
+'@
+
+explorer.exe $Path\PlasterTemplate
 
 <#
     Now I’m all set to create a new PowerShell script module.
@@ -1243,14 +1367,17 @@ $plasterParams = @{
     Version           = '0.9.0'
     Author            = 'Mike F Robbins'
     CompanyName       = 'mikefrobbins.com'
-    PowerShellVersion = '3.0'
+    Folders           = 'public', 'private'
+    Git               = 'Yes'
+    GitRepoName       = 'ModuleBuildTools'
+    Options           = ('License', 'Readme', 'GitIgnore', 'GitAttributes')
 }
 If (-not(Test-Path -Path $plasterParams.DestinationPath -PathType Container)) {
     New-Item -Path $plasterParams.DestinationPath -ItemType Directory | Out-Null
 }
 Invoke-Plaster @plasterParams -Verbose
 
-explorer.exe $Path\PlasterTemplate
+
 
 <#
     Sometimes learning new things can seem overwhelming based on examples you’ll
@@ -1316,7 +1443,7 @@ explorer.exe $Path\PlasterTemplate
     if I’ve missed following any of the best practices.
 #>
 
-Invoke-ScriptAnalyzer -Path "$Path\MrTestModule"
+Invoke-ScriptAnalyzer -Path "$Path\ModuleBuildTools\MrTestModule"
 
 <#
     It’s very easy to over look things so I’m glad to see something like
@@ -1335,7 +1462,7 @@ Invoke-ScriptAnalyzer -Path "$Path\MrTestModule"
 
 #Create a function in a PS1 file named Get-MrSystemInfo
 
-New-Item -Path "$Path\MrTestModule" -Name Get-MrSystemInfo.ps1 -ItemType File -Force |
+New-Item -Path "$Path\ModuleBuildTools\MrTestModule\public" -Name Get-MrSystemInfo.ps1 -ItemType File -Force |
 Set-Content -Encoding UTF8 -Value @'
 function Get-MrSystemInfo {
     [CmdletBinding()]
@@ -1365,25 +1492,25 @@ function Get-MrSystemInfo {
 '@
 
 #Open the new script module file in the ISE
-psEdit "$Path\MrTestModule\Get-MrSystemInfo.ps1"
+psEdit "$Path\ModuleBuildTools\MrTestModule\Public\Get-MrSystemInfo.ps1"
 
 #Get a list of the function in the module folder
-Get-MrFunctionsToExport -Path $Path\MrTestModule
+Get-MrFunctionsToExport -Path $Path\ModuleBuildTools\MrTestModule\Public -Simple -OutVariable FunctionsToExport
 
 #Add this newly created function to the list of functions to export in the manifest
-Update-ModuleManifest -Path "$Path\MrTestModule\MrTestModule.psd1" -FunctionsToExport Get-MrSystemInfo
+Update-ModuleManifest -Path "$Path\ModuleBuildTools\MrTestModule\MrTestModule.psd1" -FunctionsToExport $FunctionsToExport -VariablesToExport '@()' -CmdletsToExport '@()' -AliasesToExport '@()'
 
 #Test to make sure all of the functions in the modules folder exists in the FunctionToExport section of the manifest
-Test-MrFunctionsToExport -ManifestPath $Path\MrTestModule\MrTestModule.psd1
+Test-MrFunctionsToExport -ManifestPath $Path\ModuleBuildTools\MrTestModule\MrTestModule.psd1
 
 #Import the module
-Import-Module "$Path\MrTestModule\MrTestModule.psd1"
+Import-Module "$Path\ModuleBuildTools\MrTestModule\MrTestModule.psd1" -Force
 
 #Show the output
 Get-MrSystemInfo
 
 #Add the Type information to the customobject
-Set-Content -Path "$Path\MrTestModule\Get-MrSystemInfo.ps1" -Value @'
+Set-Content -Path "$Path\ModuleBuildTools\MrTestModule\Public\Get-MrSystemInfo.ps1" -Value @'
 function Get-MrSystemInfo {
     [CmdletBinding()]
     param ()
@@ -1414,7 +1541,7 @@ function Get-MrSystemInfo {
 
 #Create a format.ps1xml file
 
-New-Item -Path "$Path\MrTestModule" -Name MrTestModule.format.ps1xml -ItemType File -Force |
+New-Item -Path "$Path\ModuleBuildTools\MrTestModule" -Name MrTestModule.format.ps1xml -ItemType File -Force |
 Set-Content -Encoding UTF8 -Value @'
 <?xml version="1.0" encoding="utf-8" ?>
 <Configuration>
@@ -1456,10 +1583,10 @@ Set-Content -Encoding UTF8 -Value @'
 '@
 
 #Add the format file to the module manifest
-Update-ModuleManifest -Path "$Path\MrTestModule\MrTestModule.psd1" -FormatsToProcess MrTestModule.format.ps1xml
+Update-ModuleManifest -Path "$Path\ModuleBuildTools\MrTestModule\MrTestModule.psd1" -FormatsToProcess MrTestModule.format.ps1xml
 
 #Reimport the module
-Import-Module "$Path\MrTestModule\MrTestModule.psd1" -Force
+Import-Module "$Path\ModuleBuildTools\MrTestModule\MrTestModule.psd1" -Force
 
 #Show the output
 Get-MrSystemInfo
@@ -1472,7 +1599,7 @@ Get-MrSystemInfo
 
 #Create a types.ps1xml file
 
-New-Item -Path "$Path\MrTestModule" -Name MrTestModule.types.ps1xml -ItemType File -Force |
+New-Item -Path "$Path\ModuleBuildTools\MrTestModule" -Name MrTestModule.types.ps1xml -ItemType File -Force |
 Set-Content -Encoding UTF8 -Value @'
 <Types>
     <Type>
@@ -1534,7 +1661,7 @@ Set-Content -Encoding UTF8 -Value @'
 
 #Update the format.ps1xml file to reflect the new calculated properties
 
-New-Item -Path "$Path\MrTestModule" -Name MrTestModule.format.ps1xml -ItemType File -Force |
+New-Item -Path "$Path\ModuleBuildTools\MrTestModule" -Name MrTestModule.format.ps1xml -ItemType File -Force |
 Set-Content -Encoding UTF8 -Value @'
 <?xml version="1.0" encoding="utf-8" ?>
 <Configuration>
@@ -1576,10 +1703,10 @@ Set-Content -Encoding UTF8 -Value @'
 '@
 
 #Add the types file to the module manifest
-Update-ModuleManifest -Path "$Path\MrTestModule\MrTestModule.psd1" -TypesToProcess MrTestModule.types.ps1xml
+Update-ModuleManifest -Path "$Path\ModuleBuildTools\MrTestModule\MrTestModule.psd1" -TypesToProcess MrTestModule.types.ps1xml
 
 #Reimport the module
-Import-Module "$Path\MrTestModule\MrTestModule.psd1" -Force
+Import-Module "$Path\ModuleBuildTools\MrTestModule\MrTestModule.psd1" -Force
 
 #Show the output
 Get-MrSystemInfo
@@ -1690,10 +1817,8 @@ Get-MrSystemInfo | Get-Member
 
 $Path = 'C:\Demo'
 Remove-Module -Name MyModule, MrTestModule, MrToolkit -ErrorAction SilentlyContinue
-Remove-Item -Path $env:ProgramFiles\WindowsPowerShell\Modules\MyModule -Recurse -Confirm:$false -ErrorAction SilentlyContinue
 Get-ChildItem -Path $Path | Remove-Item -Recurse
 Set-Location -Path C:\
-$psISE.Options.Zoom = 100
 $host.PrivateData.ErrorForegroundColor = 'red'
 
 #endregion
