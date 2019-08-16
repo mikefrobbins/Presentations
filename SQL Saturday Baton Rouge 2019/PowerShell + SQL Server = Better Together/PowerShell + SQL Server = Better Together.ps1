@@ -1,6 +1,7 @@
 ﻿#region Presentation Info
     
 <#
+    Multiline Comment Example
     PowerShell + SQL Server = Better Together
     Presentation from SQL Saturday Baton Rouge 2019
     Author:  Mike F Robbins
@@ -10,8 +11,10 @@
 
 #endregion
 
-#region Safety to prevent the entire script from being run instead of a selection
+#region Safety
 
+#Example of single line comment
+#Safety to prevent the entire script from being run instead of a selection
 throw "You're not supposed to run the entire script"
 
 #endregion
@@ -79,6 +82,31 @@ Invoke-Command -ComputerName dc01, sql05, sql08, sql12, sql14, sql16, sql17 {
     $PSVersionTable.PSVersion
 }
 
+Invoke-Command -ComputerName DC01, SQL08, SQL12, SQL14, SQL16, SQL17 {
+    $PSVersionTable.PSVersion
+} | Group-Object -Property Major
+
+Invoke-Command -ComputerName DC01, SQL08, SQL12, SQL14, SQL16, SQL17 {
+    $PSVersionTable.PSVersion
+} | Group-Object -Property Major -NoElement
+
+$PSDefaultParameterValues
+
+$PSDefaultParameterValues += @{
+    'Group-Object:NoElement' = $true
+}
+
+$PSDefaultParameterValues
+
+Invoke-Command -ComputerName DC01, SQL08, SQL12, SQL14, SQL16, SQL17 {
+    $PSVersionTable.PSVersion
+} | Group-Object -Property Major
+
+Invoke-Command -ComputerName DC01, SQL08, SQL12, SQL14, SQL16, SQL17 {
+    $PSVersionTable.PSVersion
+} | Sort-Object -Property Major, Minor, PSComputerName -Descending |
+Format-Table -GroupBy Major
+
 Invoke-Command -ComputerName sql12, sql14, sql16, sql17 {
     Get-Module -Name SQLPS -ListAvailable
 } | Format-Table -Property ModuleType, Version, Name, ExportedCommands, PSComputerName
@@ -102,12 +130,13 @@ Get-PSSnapin -Registered
 #Add the SQL snap-in's to the current PowerShell session
 Add-PSSnapin -Name SqlServer*
 
-#Determine what commands exist in the SQL snapin's
+#Determine what commands exist in the SQL snapin's (5 commands)
 Get-Command -Module SQLServer*
 
 #Exit the one-to-one remoting session
 Exit-PSSession
 
+#The SQLPS module in SQL Server 2012 has 34 commands
 Enter-PSSession -ComputerName sql12
 Set-Location -Path C:\
 Import-Module -Name SQLPS
@@ -116,7 +145,7 @@ Get-Command -Module SQLPS
 (Get-Command -Module SQLPS).Count
 Exit-PSSession
 
-#Note the warning message and the current location is changed
+#Note the warning message and the current location is changed (46 commands)
 Enter-PSSession -ComputerName sql14
 Set-Location -Path C:\
 Import-Module -Name SQLPS
@@ -125,6 +154,7 @@ Get-Command -Module SQLPS
 (Get-Command -Module SQLPS).Count
 Exit-PSSession
 
+#The SQLPS module in SQL Server 2016 has 49 commands
 Enter-PSSession -ComputerName sql16
 Set-Location -Path C:\
 Import-Module -Name SQLPS
@@ -133,6 +163,7 @@ Get-Command -Module SQLPS
 (Get-Command -Module SQLPS).Count
 Exit-PSSession
 
+#The SQLPS module in SQL Server 2017 has 49 commands
 Enter-PSSession -ComputerName sql17
 Set-Location -Path C:\
 Import-Module -Name SQLPS
@@ -141,10 +172,11 @@ Get-Command -Module SQLPS
 (Get-Command -Module SQLPS).Count
 Exit-PSSession
 
-#What commands exist in the SQLServer PowerShell module?
+#What commands exist in the SQLServer PowerShell module? (110 commands)
 Get-Command -Module SQLServer
 (Get-Command -Module SQLServer).Count
 
+#The DBA tools module is a community created opensource module with 568 commands
 Get-Command -Module dbatools
 (Get-Command -Module dbatools).Count
 
@@ -159,6 +191,8 @@ Invoke-Sqlcmd -ServerInstance sql08 -Database master -Query '
 select name, database_id, compatibility_level, recovery_model_desc from sys.databases'
 
 #Filtering
+
+#Filter data as close as possible to the source
 
 Invoke-Sqlcmd -ServerInstance SQL12 -Database AdventureWorks2012 -Query '
 select * from Person.Person' |
@@ -369,5 +403,53 @@ New-ADUser -Path 'OU=AdventureWorks Users,OU=Users,OU=Test,DC=mikefrobbins,DC=co
 
 #Return a list of users in the AdventureWorks OU in Active Directory
 (Get-ADUser -Filter * -SearchBase 'OU=AdventureWorks Users,OU=Users,OU=Test,DC=mikefrobbins,DC=com').Count
+
+#endregion
+
+#region Bonus Content
+
+#Not Specifying a Verb in PowerShell is an Expensive Shortcut
+Service
+Trace-Command -Expression {Service} -Name CommandDiscovery -PSHost | Out-Null
+Trace-Command -Expression {Get-Service} -Name CommandDiscovery -PSHost | Out-Null
+
+#For more information, see: https://mikefrobbins.com/2017/09/27/not-specifying-a-verb-in-powershell-is-an-expensive-shortcut/
+
+Measure-Command {
+    1..1000 |
+    ForEach-Object {
+        Get-Service | Where-Object Name -like Win*
+    }
+}
+
+Measure-Command {
+    1..1000 |
+    ForEach-Object {
+        Get-Service -Name Win*
+    }
+}
+
+#Pipe to clip.exe
+(Get-Service -Name w32time).DisplayName | clip.exe
+
+$PSDefaultParameterValues += @{
+    'Out-Default:OutVariable' = 'LastResult'
+    'Out-File:Encoding' = 'utf8'
+    'Export-Csv:NoTypeInformation' = $true
+    'ConvertTo-Csv:NoTypeInformation' = $true
+    'Receive-Job:Keep' = $true
+    'Install-Module:AllowClobber' = $true
+    'Install-Module:Force' = $true
+    'Install-Module:SkipPublisherCheck' = $true
+    'Group-Object:NoElement' = $true
+}
+
+#Install the PSKoans module from the PowerShell Gallery
+#Install-Module -Name Pester -Force -SkipPublisherCheck
+#Install-Module -Name PSKoans -Force
+
+Measure-Karma
+
+Measure-Karma -Meditate
 
 #endregion
