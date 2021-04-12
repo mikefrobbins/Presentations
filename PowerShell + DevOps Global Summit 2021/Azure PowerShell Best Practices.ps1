@@ -71,40 +71,7 @@ Find-Module -Name Az.Sql -AllowPrerelease
 
 #endregion
 
-#region Getting started with Azure PowerShell
-
-<#
-The first thing you will need to do is to sign into Azure unless you're using Azure Cloud Shell.
-Cloud Shell: shell.azure.com
-#>
-
-# Sign into Azure
-Connect-AzAccount
-
-#endregion
-
 #region AzureRM coexistence
-
-<#
-We do not support having both the AzureRM and Az modules installed for PowerShell 5.1 on Windows at the same time.
-
-In a scenario where you want to install both AzureRM and the Az PowerShell module on the same
-system, AzureRM must be installed in the user scope for Windows PowerShell. Install the Az
-PowerShell module for PowerShell 7.x on the same system.
-#>
-
-#Determine the version of PowerShell you're running
-
-$PSVersionTable.PSVersion
-
-#The PowerShell 7 PSModulePath contains the Windows PowerShell all users path. This means that PowerShell 7 will see modules installed in the all users scope for Windows PowerShell.
-
-$env:PSModulePath -split ';'
-
-#Determine where the AzureRM module is installed
-
-Get-Module -Name AzureRM -ListAvailable |
-Format-List -Property Path, ModuleBase
 
 <#
 AzureRM deprecation has been announced. The official deprecation date is 29 February 2024
@@ -131,7 +98,17 @@ aka.ms/azps-migration-latest
 
 #endregion
 
-#region Uninstallation
+#region Troubleshooting
+
+#Use of the Debug parameter to return addition information to assist in troubleshooting problems
+Get-AzResource -Name 'DoesNotExist'
+Get-AzResource -Name 'DoesNotExist' -Debug
+
+$DebugPreference
+$DebugPreference = 'Continue'
+Get-AzResource -Name 'DoesNotExist'
+
+#Uninstallation
 
 #Use the same method of installation. Either MSI or PowerShellGet
 
@@ -150,41 +127,9 @@ Get-Module -Name Az -ListAvailable -OutVariable AzVersions
 
 Uninstall-Module -Name $AzModules
 
-#More information is needed about the modules
-
-Get-Module -Name $AzModules -ListAvailable -OutVariable AzModuleVersions
-
-#Determine any dependencies for the modules
-
-($AzModuleVersions |
-  ForEach-Object {
-    Import-Clixml -Path (Join-Path -Path $_.ModuleBase -ChildPath PSGetModuleInfo.xml)
-  }).Dependencies.Name | Sort-Object -Descending -Unique -OutVariable AzModuleDependencies
-
-#Remove from the list of modules any module that is a dependency of another module
-
-$AzModuleDependencies |
-  ForEach-Object {
-    $AzModules.Remove($_)
-  }
-
-#endregion
-
-#region Troubleshooting
-
-#Use of the Debug parameter to return addition information to assist in troubleshooting problems
-Get-AzResource -Name 'DoesNotExist'
-Get-AzResource -Name 'DoesNotExist' -Debug
-
-$DebugPreference
-$DebugPreference = 'Continue'
-Get-AzResource -Name 'DoesNotExist'
-
 <#
 See our Azure PowerShell troublshooting page at aka.ms/azpstroubleshooting
 #>
-
-#How to find help
 
 <#
 Report issues via a GitHub issue
