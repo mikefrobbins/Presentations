@@ -27,6 +27,8 @@ $VSCodeSettingsPath = "$HOME/Library/Application Support/Code/User/profiles/-12b
 $VSCodeSettings = Get-Content -Path $VSCodeSettingsPath
 $VSCodeSettings | ConvertFrom-Json | Select-Object -Property 'workbench.colorTheme', 'window.zoomLevel'
 
+$VSCodeSettings | Out-File -FilePath $VSCodeSettingsPath
+
 if ($VSCodeSettings -match '"workbench.colorTheme": ".*",') {
     $VSCodeSettings = $VSCodeSettings -replace '"workbench.colorTheme": ".*",', '"workbench.colorTheme": "PowerShell ISE",'
 }
@@ -68,7 +70,9 @@ $PSVersionTable.PSVersion | Get-Member -MemberType Properties
 
 Get-Verb
 (Get-Verb).Count
-Get-Verb | Group-Object -Property Group -NoElement
+Get-Verb | Group-Object -Property Group -NoElement | Sort-Object -Property Count -Descending
+Get-Verb | Where-Object -Property Group -eq Other
+Get-Verb -Group Other
 
 # Get-Help is one of the three most useful cmdlets in PowerShell
 
@@ -268,10 +272,6 @@ Update-ModuleManifest -Path '/Users/mikefrobbins/Developer/git/TestModule/MrTest
 Import-Module -Name '/Users/mikefrobbins/Developer/git/TestModule/MrTestModule\MrTestModule.psd1'
 Get-Command -Module MrTestModule
 
-
-#endregion
-
-#region Summary
 
 #endregion
 
