@@ -354,7 +354,7 @@ Get-AzResourceGroup | Select-Object -Property ResourceGroupName
 #region Run Azure PowerShell in a Docker container
 
 #Download the latest azure-powershell image.
-docker pull mcr.microsoft.com/azure-powershell:mariner-2-arm64
+#docker pull mcr.microsoft.com/azure-powershell:mariner-2-arm64
 
 #Run the azure-powershell container in interactive mode:
 docker run -it mcr.microsoft.com/azure-powershell:mariner-2-arm64 pwsh
