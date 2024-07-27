@@ -50,11 +50,17 @@ throw "You're not supposed to run the entire script"
 
 #endregion
 
+#region Prerequisites
+
 # Sign up for a free Azure subscription
 Start-Process https://azure.microsoft.com/free
 
 # Student - Sign up for a free Azure subscription
 'https://azure.microsoft.com/free/students', 'https://azure.microsoft.com/pricing/offers/ms-azr-0170p' | ForEach-Object {Start-Process $_}
+
+#endregion
+
+#region Installation
 
 # Install the Az PowerShell module
 Find-Module -Name Az
@@ -86,6 +92,10 @@ ForEach-Object {
     Select-Object -First 1
 }
 
+#endregion
+
+#region Authentication and selecting a Subscription
+
 # Login to Azure
 Connect-AzAccount -WhatIf
 
@@ -98,13 +108,15 @@ Get-AzContext -ListAvailable
 # List all available subscriptions
 Get-AzSubscription
 
+#endregion
+
+#region Create a resource group and find a region
+
 # List the resource groups that exist in my subscription
 Get-AzResourceGroup
 
 # Select specific properties of the resource groups
 Get-AzResourceGroup | Select-Object -Property ResourceGroupName, Location
-
-
 
 # Get a list of Azure regions
 Get-AzLocation
@@ -117,9 +129,11 @@ $locations = Get-AzLocation
 Get-AzLocation -OutVariable regions
 $locations
 $regions
+$locations.Count
 
 # Filter the list of Azure regions
 $locations | Where-Object GeographyGroup -match 'US'
+($locations | Where-Object GeographyGroup -match 'US').Count
 
 # Filter the list of Azure regions and select specific properties
 $locations | Where-Object GeographyGroup -match 'US' | Select-Object -Property Location, PhysicalLocation, PairedRegion
@@ -156,6 +170,10 @@ Select-Object -Property Location,
                             }
                         }
 
+#endregion
+
+#region Create an Azure VM interactively
+
 # Define VM Name, Resource Group Name, and Region (location)
 $location = 'westus3'
 $resourceGroupName = 'SQLSatBR'
@@ -191,6 +209,8 @@ $vmParams = @{
     OpenPorts = 22
     PublicIpAddressName = $vmName
 }
+$vmParams
+$vmParams | Get-Member
 New-AzVM @vmParams -OutVariable vmInfo
 
 Get-AzVM
@@ -220,7 +240,10 @@ ssh myadmin@$($ip.IpAddress)
 # sudo yum install https://github.com/PowerShell/PowerShell/releases/download/v7.4.4/powershell-7.4.4-1.rh.x86_64.rpm
 # exit
 
-# Remove the resource group and all resources
+#endregion
+
+#region Remove the resource group and all resources
+
 if ($resources.count -gt 0) {
     Write-Warning -Message "Unable to remove $resourceGroupName. It contains other resources."
 } else {
@@ -229,6 +252,16 @@ if ($resources.count -gt 0) {
 
 # Show the VM no longer exists
 Get-AzVM
+
+#endregion
+
+#region Create Azure VMs at scale using Azure PowerShell
+
+#foreach loop in PowerShell
+$items = 1..3
+foreach ($item in $items) {
+    $item
+}
 
 # Verify variables are populated
 if (-not($Cred)) {
@@ -315,6 +348,18 @@ Get-AzVM
 
 # Show the resource groups no longer exist
 Get-AzResourceGroup | Select-Object -Property ResourceGroupName
+
+#endregion
+
+#region Run Azure PowerShell in a Docker container
+
+#Download the latest azure-powershell image.
+docker pull mcr.microsoft.com/azure-powershell:mariner-2-arm64
+
+#Run the azure-powershell container in interactive mode:
+docker run -it mcr.microsoft.com/azure-powershell:mariner-2-arm64 pwsh
+
+#endregion
 
 #region Cleanup
 
